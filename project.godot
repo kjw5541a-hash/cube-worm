@@ -27,3 +27,8 @@ pointing/emulate_touch_from_mouse=true
 ; 웹은 설정과 무관하게 Compatibility 로 돈다. 데스크톱 화면도 같게 하려고 처음부터 맞춘다.
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+
+[gui]
+
+; 웹에는 시스템 폰트가 없고 Godot 내장 폰트에는 한글이 없다. 지정하지 않으면 폰에서 한글이 네모로 나온다.
+theme/custom_font="res://assets/fonts/NotoSansKR-hangul.ttf"

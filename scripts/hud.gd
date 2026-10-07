@@ -1,0 +1,78 @@
+class_name Hud
+extends CanvasLayer
+
+# 위쪽: 점수, 빌드 버전과 fps, 맵 회전 버튼 2개. 죽은 뒤에는 다시 시작 안내.
+
+signal turn_pressed(dir: int)
+
+var score_label := Label.new()
+var info_label := Label.new()
+var restart_label := Label.new()
+var _version := str(ProjectSettings.get_setting("application/config/version", "dev"))
+
+func _ready() -> void:
+	score_label.position = Vector2(24, 16)
+	score_label.add_theme_font_size_override("font_size", 48)
+	add_child(score_label)
+	info_label.position = Vector2(24, 80)
+	info_label.add_theme_font_size_override("font_size", 18)
+	info_label.modulate = Color(1, 1, 1, 0.6)
+	add_child(info_label)
+	restart_label.text = "탭하면 다시 시작"
+	restart_label.add_theme_font_size_override("font_size", 40)
+	restart_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	restart_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	restart_label.offset_top = 130
+	restart_label.visible = false
+	add_child(restart_label)
+	for d in [-1, 1]:
+		var b := TurnButton.new(d)
+		b.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		b.position = Vector2(-120 if d == 1 else -232, 16)
+		b.pressed_dir.connect(turn_pressed.emit)
+		add_child(b)
+
+func set_score(v: int) -> void:
+	score_label.text = str(v)
+
+func show_restart(on: bool) -> void:
+	restart_label.visible = on
+
+func _process(_delta: float) -> void:
+	info_label.text = "%s  %d fps" % [_version, Engine.get_frames_per_second()]
+
+# 맵 회전 버튼. ⟲⟳ 같은 기호는 한글 폰트에 없어 네모로 나오므로 직접 그린다.
+class TurnButton extends Control:
+	signal pressed_dir(dir: int)
+	var dir := 1
+
+	func _init(d: int) -> void:
+		dir = d
+		size = Vector2(104, 104)
+		mouse_filter = Control.MOUSE_FILTER_STOP
+
+	func _gui_input(event: InputEvent) -> void:
+		var t := event as InputEventScreenTouch
+		if t != null and t.pressed:
+			pressed_dir.emit(dir)
+			accept_event()
+
+	# 240° 호 + 화살촉. dir = 1 이면 시계 방향, -1 이면 좌우를 뒤집어 반시계.
+	func _draw() -> void:
+		var c := size * 0.5
+		draw_circle(c, 46.0, Color(1, 1, 1, 0.12))
+		var flip := Vector2(dir, 1)
+		var arc := PackedVector2Array()
+		for k in 25:
+			var a := deg_to_rad(-210.0 + 240.0 * k / 24.0)
+			arc.append(c + Vector2(cos(a), sin(a)) * 24.0 * flip)
+		draw_polyline(arc, Color.WHITE, 5.0, true)
+		var a1 := deg_to_rad(30.0)
+		var tip := Vector2(cos(a1), sin(a1)) * 24.0
+		var tan := Vector2(-sin(a1), cos(a1))
+		var out := Vector2(cos(a1), sin(a1))
+		draw_colored_polygon(PackedVector2Array([
+			c + (tip + tan * 12.0) * flip,
+			c + (tip - tan * 4.0 + out * 10.0) * flip,
+			c + (tip - tan * 4.0 - out * 10.0) * flip,
+		]), Color.WHITE)
