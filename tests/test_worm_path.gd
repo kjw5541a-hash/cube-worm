@@ -94,7 +94,7 @@ func _test_random_play_inside_cells_and_continuous() -> void:
 			games += 1
 			g = Game.new(games)
 		if rng.randf() < 0.1 or g.state == Game.State.WAITING:
-			g.press(DIRS[rng.randi_range(0, 5)])
+			g.press(rng.randi_range(0, 3))  # Worm.Steer 네 가지 중 아무거나
 		var w := g.worm
 		var before: Array[Transform3D] = []
 		for j in w.length():

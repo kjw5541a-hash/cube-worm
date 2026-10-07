@@ -3,6 +3,10 @@ extends SceneTree
 const X := Vector3i(1, 0, 0)
 const Y := Vector3i(0, 1, 0)
 const Z := Vector3i(0, 0, 1)
+const L := Worm.Steer.LEFT
+const R := Worm.Steer.RIGHT
+const U := Worm.Steer.UP
+const D := Worm.Steer.DOWN
 const FRAME := 1.0 / 60.0
 
 func _initialize() -> void:
@@ -11,6 +15,9 @@ func _initialize() -> void:
 	_test_alpha_and_frame_clamp()
 	_test_straight_when_queue_empty()
 	_test_queue_turns_next_cell()
+	_test_double_turn_is_a_u_turn()
+	_test_up_then_down_down_comes_back_down()
+	_test_queued_exit_previews_next_turn()
 	_test_wall_death()
 	_test_rock_death()
 	_test_body_death()
@@ -33,6 +40,12 @@ func _clean(head := Vector3i(4, 4, 4), length := 3) -> Game:
 	g.worm = Worm.straight(head, -X, length)
 	return g
 
+# 출발한 상태로 만든다: 머리가 dir 쪽으로 곧장 간다. 조향은 지렁이 기준이라 첫 입력이 곧 꺾임이므로,
+# 곧장 출발하는 판이 필요한 테스트는 이렇게 직접 놓는다.
+func _go(g: Game, dir: Vector3i) -> void:
+	g.state = Game.State.RUNNING
+	g.worm.head_exit = dir
+
 # 머리가 한 칸 나아갈 때까지 돌린다.
 func _one_step(g: Game) -> void:
 	var start := g.worm.head()
@@ -44,43 +57,38 @@ func _one_step(g: Game) -> void:
 
 func _test_start_rules() -> void:
 	var g := _clean()
-	assert(not g.press(X), "목 쪽으로는 출발할 수 없다")
 	assert(g.state == Game.State.WAITING)
 	g.advance(1.0)
 	assert(g.alpha == 0.0, "출발 전에는 진행하지 않는다")
-	assert(g.press(-X), "앞으로 출발")
-	assert(g.state == Game.State.RUNNING and g.worm.head_exit == -X)
-	var g2 := _clean()
-	assert(g2.press(Y), "옆이나 위로도 바로 출발한다")
-	assert(g2.worm.head_exit == Y, "첫 입력은 큐를 거치지 않고 바로 머리 칸의 출구가 된다")
-	assert(g2.queue.is_empty())
+	# 첫 버튼이 곧 첫 꺾임이다. 시작 지렁이는 -X 를 본다.
+	for row in [[L, Z], [R, -Z], [U, Y], [D, -Y]]:
+		var s := _clean()
+		assert(s.press(row[0]), "출발 전 첫 입력은 받는다")
+		assert(s.state == Game.State.RUNNING and s.worm.head_exit == row[1], "-X 를 보는 지렁이의 %s → %s" % [row[0], s.worm.head_exit])
+		assert(s.queue.is_empty(), "첫 입력은 큐를 거치지 않고 바로 머리 칸의 출구가 된다")
 
 func _test_queue_rules() -> void:
 	var g := _clean()
-	g.press(-X)
-	assert(not g.press(-X), "같은 방향은 무시")
-	assert(not g.press(X), "정반대는 무시")
-	assert(g.press(Y))
-	assert(not g.press(-Y), "큐 마지막의 정반대도 무시")
-	assert(not g.press(Y), "큐 마지막과 같은 방향도 무시")
-	assert(g.press(Z))
-	assert(not g.press(-X), "큐는 최대 2개")
-	assert(g.queue.size() == 2)
+	_go(g, -X)
+	assert(g.press(L))
+	assert(g.press(L), "같은 버튼을 이어서 눌러도 받는다 — 두 번 꺾는다")
+	assert(not g.press(R), "큐는 최대 2개")
+	assert(g.queue == ([L, L] as Array[int]), "큐: %s" % [g.queue])
 
 func _test_alpha_and_frame_clamp() -> void:
 	var g := _clean()
-	g.press(-X)
+	_go(g, -X)
 	g.advance(0.1)
 	assert(is_equal_approx(g.alpha, Tuning.SPEED_START * 0.1), "시작 속도 × 0.1초만큼 간다: %f" % g.alpha)
 	var g2 := _clean()
-	g2.press(-X)
+	_go(g2, -X)
 	g2.advance(5.0)
 	assert(is_equal_approx(g2.alpha, 1.0 / 3.0), "한 프레임에 1/3 칸을 넘지 않는다: %f" % g2.alpha)
 	assert(g2.worm.head() == Vector3i(4, 4, 4), "프레임이 밀려도 칸을 건너뛰지 않는다")
 
 func _test_straight_when_queue_empty() -> void:
 	var g := _clean()
-	g.press(-X)
+	_go(g, -X)
 	_one_step(g)
 	assert(g.worm.head() == Vector3i(3, 4, 4))
 	assert(g.worm.head_exit == -X, "큐가 비면 직진")
@@ -89,38 +97,82 @@ func _test_straight_when_queue_empty() -> void:
 
 func _test_queue_turns_next_cell() -> void:
 	var g := _clean()
-	g.press(-X)
-	g.press(Y)
+	_go(g, -X)
+	g.press(U)
 	_one_step(g)
 	assert(g.worm.head() == Vector3i(3, 4, 4), "이미 정해진 출구로 먼저 간다")
-	assert(g.worm.head_exit == Y, "새 칸의 출구는 큐에서 꺼낸 방향")
+	assert(g.worm.head_exit == Y, "새 칸의 출구는 큐에서 꺼낸 입력을 지렁이 기준으로 꺾은 방향")
 	assert(g.queue.is_empty())
 	_one_step(g)
 	assert(g.worm.head() == Vector3i(3, 5, 4), "다음 걸음에 꺾인다")
 
+# ◀ 를 두 번 누르면 두 칸에 걸쳐 U턴한다. 두 번째 꺾임은 첫 꺾임 뒤의 방향이 기준이다.
+func _test_double_turn_is_a_u_turn() -> void:
+	var g := _clean()
+	_go(g, -X)
+	g.press(L)
+	g.press(L)
+	_one_step(g)
+	assert(g.worm.head() == Vector3i(3, 4, 4) and g.worm.head_exit == Z, "첫 ◀: -X 에서 +Z 로")
+	_one_step(g)
+	assert(g.worm.head() == Vector3i(3, 4, 5) and g.worm.head_exit == X, "둘째 ◀: +Z 에서 +X 로")
+	_one_step(g)
+	assert(g.worm.head() == Vector3i(4, 4, 5), "U턴을 마치고 되돌아간다")
+
+# 위로 올라가다 다시 내려오려면 ▼ 를 두 번 누른다: 첫 ▼ 는 가던 수평 방향으로 눕고, 둘째 ▼ 가 아래로 꺾는다.
+func _test_up_then_down_down_comes_back_down() -> void:
+	var g := _clean()
+	_go(g, -X)
+	g.press(U)
+	_one_step(g)
+	assert(g.worm.head() == Vector3i(3, 4, 4) and g.worm.head_exit == Y, "▲ 로 위를 향한다")
+	g.press(D)
+	g.press(D)
+	_one_step(g)
+	assert(g.worm.head() == Vector3i(3, 5, 4) and g.worm.head_exit == -X, "올라가다 ▼ 한 번: 가던 수평 방향(-X)으로 눕는다")
+	_one_step(g)
+	assert(g.worm.head() == Vector3i(2, 5, 4) and g.worm.head_exit == -Y, "▼ 두 번째: 아래로 꺾는다")
+	_one_step(g)
+	assert(g.worm.head() == Vector3i(2, 4, 4), "올라간 길 옆 칸으로 내려온다")
+
+func _test_queued_exit_previews_next_turn() -> void:
+	var g := _clean()
+	_go(g, -X)
+	assert(g.queued_exit() == Vector3i.ZERO, "큐가 비면 예고할 방향이 없다")
+	g.press(U)
+	assert(g.queued_exit() == Y, "-X 로 가는 중 ▲ 는 다음 칸에서 위")
+	g.press(L)
+	assert(g.queued_exit() == Y, "예고는 큐 맨 앞 입력만 본다")
+	var up := _clean()
+	_go(up, -X)
+	up.press(U)
+	_one_step(up)
+	up.press(D)
+	assert(up.queued_exit() == -X, "위로 가는 중 ▼ 는 가던 수평 방향(-X)")
+
 func _test_wall_death() -> void:
 	var g := _clean(Vector3i(0, 4, 4))
-	g.press(-X)
+	_go(g, -X)
 	_one_step(g)
 	assert(g.state == Game.State.DEAD, "상자 밖으로 나가면 죽는다")
 	assert(g.alpha == Tuning.DEATH_STOP, "머리 앞면이 벽 면에 닿는 자리에서 멈춘다: %f" % g.alpha)
 	assert(g.worm.head() == Vector3i(0, 4, 4))
 	g.advance(1.0)
 	assert(g.alpha == Tuning.DEATH_STOP, "죽은 뒤에는 진행하지 않는다")
-	assert(not g.press(Y), "죽은 뒤에는 입력을 받지 않는다")
+	assert(not g.press(U), "죽은 뒤에는 입력을 받지 않는다")
 
 func _test_rock_death() -> void:
 	var g := _clean()
 	g.field.rocks[Vector3i(3, 4, 4)] = true
-	g.press(-X)
+	_go(g, -X)
 	_one_step(g)
 	assert(g.state == Game.State.DEAD, "바위에 부딪히면 죽는다")
 
 func _test_body_death() -> void:
 	var g := _clean(Vector3i(2, 4, 4), 5)
-	g.press(Z)
-	g.press(X)
-	g.press(-Z)
+	g.press(L)  # 출발: -X 에서 왼쪽 = +Z
+	g.press(L)  # +Z 에서 왼쪽 = +X
+	g.press(L)  # +X 에서 왼쪽 = -Z
 	_one_step(g)
 	_one_step(g)
 	assert(g.state == Game.State.RUNNING)
@@ -129,9 +181,9 @@ func _test_body_death() -> void:
 
 func _test_tail_follow_allowed() -> void:
 	var g := _clean(Vector3i(2, 4, 4), 4)
-	g.press(Z)
-	g.press(X)
-	g.press(-Z)
+	g.press(L)
+	g.press(L)
+	g.press(L)
 	for i in 3:
 		_one_step(g)
 	assert(g.state == Game.State.RUNNING, "막 비워지는 꼬리 칸으로는 들어가도 된다")
@@ -142,7 +194,7 @@ func _test_stop_before_obstacle_every_frame() -> void:
 	for dt in [1.0 / 144.0, 1.0 / 60.0, 1.0 / 20.0, 0.5]:
 		var g := _clean()
 		g.field.rocks[Vector3i(3, 4, 4)] = true
-		g.press(-X)
+		_go(g, -X)
 		for i in 400:
 			g.advance(dt)
 			assert(g.alpha <= Tuning.DEATH_STOP, "막힌 칸 앞에서 머리가 장애물에 박혔다: %f (dt %f)" % [g.alpha, dt])
@@ -151,7 +203,7 @@ func _test_stop_before_obstacle_every_frame() -> void:
 func _test_eating() -> void:
 	var g := _clean()
 	g.field.bugs.assign([Vector3i(3, 4, 4), Vector3i(0, 0, 0), Vector3i(7, 7, 7)])
-	g.press(-X)
+	_go(g, -X)
 	_one_step(g)
 	assert(g.score == 1, "벌레 한 마리 = 1점")
 	assert(g.worm.length() == 4, "한 마디 자란다")
@@ -170,7 +222,7 @@ func _test_speed_cap() -> void:
 	var g := _clean()
 	g.speed = Tuning.SPEED_MAX - Tuning.SPEED_STEP * 0.5
 	g.field.bugs.assign([Vector3i(3, 4, 4), Vector3i(2, 4, 4)])
-	g.press(-X)
+	_go(g, -X)
 	_one_step(g)
 	assert(g.speed == Tuning.SPEED_MAX, "최대 속도에서 멈춘다: %f" % g.speed)
 	_one_step(g)
@@ -178,7 +230,7 @@ func _test_speed_cap() -> void:
 
 func _test_paused_freezes() -> void:
 	var g := _clean()
-	g.press(-X)
+	_go(g, -X)
 	g.paused = true
 	g.advance(0.2)
 	assert(g.alpha == 0.0, "회전 중에는 진행하지 않는다")
@@ -200,7 +252,7 @@ func _test_new_game_layout() -> void:
 func _test_bugs_stay_valid_in_random_play() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 42
-	var dirs: Array[Vector3i] = [X, -X, Y, -Y, Z, -Z]
+	var steers := [L, R, U, D]
 	var g := Game.new(0)
 	var games := 0
 	var steps := 0
@@ -209,7 +261,7 @@ func _test_bugs_stay_valid_in_random_play() -> void:
 			games += 1
 			g = Game.new(games)
 		if rng.randf() < 0.08 or g.state == Game.State.WAITING:
-			g.press(dirs[rng.randi_range(0, 5)])
+			g.press(steers[rng.randi_range(0, 3)])
 		var before := g.worm.head()
 		g.advance(FRAME)
 		if g.worm.head() != before:

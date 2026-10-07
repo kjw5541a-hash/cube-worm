@@ -21,7 +21,7 @@ func _test_layer_plane_follows_head() -> void:
 	var g := _game()
 	var fv := _view(g)
 	assert(fv.rocks.multimesh.instance_count == g.field.rocks.size(), "바위 수만큼 그린다")
-	g.press(Vector3i(0, 1, 0))
+	g.press(Worm.Steer.UP)  # 출발 전 첫 입력은 바로 꺾임: -X 를 보는 지렁이가 위로 간다
 	for i in 10:
 		g.advance(1.0 / 60.0)
 		fv._update()

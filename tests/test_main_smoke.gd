@@ -10,12 +10,9 @@ func _initialize() -> void:
 	await process_frame
 	var game: Game = main.game
 	assert(game.state == Game.State.WAITING, "처음에는 출발을 기다린다")
-	var ahead := -1  # 머리가 보는 쪽을 가리키는 화면 방향
-	for i in 6:
-		if main.rig.world_dir(i) == Tuning.START_DIR:
-			ahead = i
-	main.controller.direction_pressed.emit(ahead)
-	assert(game.state == Game.State.RUNNING, "방향 입력으로 출발한다")
+	main.controller.steer_pressed.emit(Worm.Steer.LEFT)  # 출발 전 첫 입력은 바로 꺾임: -X 를 보는 지렁이의 왼쪽 = +Z
+	assert(game.state == Game.State.RUNNING, "조향 입력으로 출발한다")
+	assert(game.worm.head_exit == Vector3i(0, 0, 1), "컨트롤러의 ◀ 가 게임까지 이어져 왼쪽(+Z)으로 꺾는다: %s" % game.worm.head_exit)
 	await create_timer(0.5).timeout
 	assert(game.worm.head() != Tuning.START_HEAD, "0.5초면 한 칸 넘게 간다")
 	assert(main.worm_view.body.multimesh.visible_instance_count == game.worm.length() - 1, "몸 마디 수 = 길이 - 1")
@@ -50,11 +47,11 @@ func _initialize() -> void:
 	var yaw: int = main.rig.yaw_step
 	main.controller.turn_pressed.emit(1)
 	assert(main.rig.yaw_step == yaw, "죽은 뒤에는 맵이 돌지 않는다")
-	main.controller.direction_pressed.emit(0)
+	main.controller.steer_pressed.emit(Worm.Steer.LEFT)
 	assert(main.game == game, "죽은 직후에는 다시 시작하지 않는다")
 	await create_timer(Tuning.DEATH_DELAY + 0.1).timeout
 	assert(main.hud.restart_label.visible, "잠시 뒤 다시 시작 안내")
-	main.controller.direction_pressed.emit(0)
+	main.controller.steer_pressed.emit(Worm.Steer.LEFT)
 	assert(main.game != game and main.game.state == Game.State.WAITING, "새 판이 시작된다")
 	print("test_main_smoke: OK")
 	quit()

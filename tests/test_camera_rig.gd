@@ -4,8 +4,6 @@ const B := Tuning.BOX
 const CENTER := Vector3(B, B, B) * 0.5
 
 func _initialize() -> void:
-	await _test_buttons_match_real_camera()
-	_test_vertical_and_opposites()
 	await _test_turn_is_clockwise_and_accumulates()
 	await _test_box_fits_screen()
 	await _test_same_scale_on_other_screens()
@@ -23,42 +21,26 @@ func _rig(size := Vector2i(720, 1280)) -> CameraRig:
 	r.camera.make_current()
 	return r
 
-# 실제 Camera3D 로 투영한 화면 각도와 버튼 각도를 대조한다. 표끼리의 관계만 보면 표 전체가
-# 뒤집혀도 통과하므로, 여기서는 카메라가 그린 그대로를 본다.
-func _test_buttons_match_real_camera() -> void:
-	var r := _rig()
-	for step in 4:
-		r.yaw_step = step
-		r.rotation_degrees.y = CameraRig.YAW_BASE_DEG + 90.0 * step
-		await process_frame
-		var o := r.camera.unproject_position(CENTER)
-		for i in 6:
-			var s := r.camera.unproject_position(CENTER + Vector3(r.world_dir(i))) - o
-			var ang := rad_to_deg(atan2(-s.y, s.x))
-			var want := 30.0 + 60.0 * i
-			assert(absf(angle_difference(deg_to_rad(ang), deg_to_rad(want))) < deg_to_rad(1.0),
-				"시점 %d 버튼 %d: 화면 각도 %f, 기대 %f" % [step, i, ang, want])
-	r.get_parent().queue_free()
+# 화면에 비친 월드 방향 v 의 각도(라디안, 화면 오른쪽이 0, 반시계). 실제 카메라가 그린 그대로 잰다.
+func _screen_angle(r: CameraRig, v: Vector3) -> float:
+	var s := r.camera.unproject_position(CENTER + v) - r.camera.unproject_position(CENTER)
+	return atan2(-s.y, s.x)
 
-func _test_vertical_and_opposites() -> void:
-	for step in 4:
-		var yaw := CameraRig.YAW_BASE_DEG + 90.0 * step
-		assert(CameraRig.axis_for(1, yaw) == Vector3i(0, 1, 0), "▲ 는 언제나 위")
-		assert(CameraRig.axis_for(4, yaw) == Vector3i(0, -1, 0), "▼ 는 언제나 아래")
-		var seen := {}
-		for i in 6:
-			var a := CameraRig.axis_for(i, yaw)
-			assert(a == -CameraRig.axis_for((i + 3) % 6, yaw), "마주 보는 버튼은 반대 방향")
-			seen[a] = true
-		assert(seen.size() == 6, "버튼 6개가 축 6개에 하나씩")
-
+# 맵 회전은 위에서 본 월드가 시계 방향으로 도는 것이다: 화면 ↗(30°)에 보이던 수평 축이 ↘(-30°)로 간다.
 func _test_turn_is_clockwise_and_accumulates() -> void:
 	var r := _rig()
-	var ne := r.world_dir(0)
+	await process_frame
+	var ne := Vector3.ZERO  # 처음 시점에서 화면 ↗ 에 보이는 수평 축
+	for a in [Vector3.RIGHT, Vector3.LEFT, Vector3.BACK, Vector3.FORWARD]:
+		if absf(angle_difference(_screen_angle(r, a), deg_to_rad(30.0))) < deg_to_rad(1.0):
+			ne = a
+	assert(ne != Vector3.ZERO, "처음 시점에 ↗ 로 보이는 수평 축이 있어야 한다")
 	r.turn(1)
 	assert(r.yaw_step == 1, "회전 단계는 누르는 즉시 바뀐다")
 	assert(r.is_turning(), "트윈이 도는 중")
-	assert(r.world_dir(5) == ne, "시계 방향: ↗ 에 있던 축이 ↘ 로 간다")
+	await create_timer(Tuning.TURN_TIME + 0.2).timeout
+	assert(absf(angle_difference(_screen_angle(r, ne), deg_to_rad(-30.0))) < deg_to_rad(1.0),
+		"시계 방향: ↗ 에 보이던 축이 ↘ 로 간다 (화면 각도 %f°)" % rad_to_deg(_screen_angle(r, ne)))
 	for d in [1, 1, -1, 1]:
 		r.turn(d)
 	await create_timer(Tuning.TURN_TIME + 0.2).timeout

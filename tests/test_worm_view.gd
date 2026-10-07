@@ -4,6 +4,7 @@ func _initialize() -> void:
 	_test_tail_scale()
 	_test_instances_follow_path()
 	_test_new_tail_grows_from_zero()
+	_test_head_glances_toward_queued_turn()
 	print("test_worm_view: OK")
 	quit()
 
@@ -20,7 +21,7 @@ func _game_moving_up() -> Game:
 	var g := Game.new(3)
 	g.field.rocks.clear()
 	g.field.bugs.clear()
-	g.press(Vector3i(0, 1, 0))
+	g.press(Worm.Steer.UP)  # 출발 전 첫 입력은 바로 꺾임: -X 를 보는 지렁이가 위로 간다
 	for i in 20:
 		g.advance(1.0 / 60.0)
 	return g
@@ -42,10 +43,29 @@ func _test_new_tail_grows_from_zero() -> void:
 	var g := Game.new(3)
 	g.field.rocks.clear()
 	g.field.bugs.assign([Vector3i(3, 4, 4)])
-	g.press(Vector3i(-1, 0, 0))
+	g.state = Game.State.RUNNING  # 곧장 -X 로 간다. 조향 첫 입력은 꺾임이라 직접 출발시킨다
+	g.worm.head_exit = Vector3i(-1, 0, 0)
 	while g.worm.length() == 3:
 		g.advance(1.0 / 60.0)
 	var last := WormView.body_transform(g, g.worm.length() - 1, 0.0).basis.get_scale().z
 	assert(last <= Tuning.TAIL_TAPER[0] * g.alpha + 0.01, "새 꼬리는 크기 0 에서 부풀어야 한다: %f (alpha %f)" % [last, g.alpha])
 	var before := WormView.body_transform(g, g.worm.length() - 2, 0.0).basis.get_scale().z
 	assert(absf(before - Tuning.TAIL_TAPER[0]) < 0.12, "원래 꼬리는 자라는 걸음 처음에 원래 크기를 유지한다: %f" % before)
+
+# 다음 칸에서 꺾을 입력이 큐에 있으면 머리가 그쪽으로 고개를 살짝 돌린다(예고 동작).
+func _test_head_glances_toward_queued_turn() -> void:
+	var g := Game.new(3)
+	g.field.rocks.clear()
+	g.field.bugs.clear()
+	g.state = Game.State.RUNNING
+	g.worm.head_exit = Vector3i(-1, 0, 0)  # 곧장 -X 로
+	g.press(Worm.Steer.LEFT)  # 다음 칸에서 왼쪽 = +Z
+	var want := Vector3(g.queued_exit())
+	assert(want == Vector3(0, 0, 1), "-X 로 가는 중 왼쪽은 +Z: %s" % want)
+	var wv := WormView.new()
+	root.add_child(wv)
+	wv.setup(g)
+	var straight := -WormPath.segment(g.worm, 0, g.alpha).basis.z
+	var looking := -wv._head_transform(1.0).basis.z  # 예고 동작이 끝까지 간 뒤
+	assert(looking.dot(want) > straight.dot(want) + sin(deg_to_rad(Tuning.GLANCE_DEG)) * 0.9, "머리가 꺾을 쪽(+Z)으로 고개를 돌려야 한다: %s" % looking)
+	wv.queue_free()

@@ -11,7 +11,7 @@ var state := State.WAITING
 var alpha := 0.0              # 머리가 지금 칸을 지난 비율. 0 = 입구 면, 1 = 출구 면
 var speed := Tuning.SPEED_START
 var score := 0
-var queue: Array[Vector3i] = []
+var queue: Array[int] = []    # 아직 적용 안 된 조향 입력(Worm.Steer). 칸 경계마다 하나씩 꺼내 쓴다
 var paused := false           # 맵 회전 중이면 밖에서 켠다
 var just_grew := false        # 이번 걸음에 꼬리가 자랐는가(새 꼬리가 부풀어 오르는 연출용)
 
@@ -33,21 +33,25 @@ func _init(seed: int = 0, perf := false) -> void:
 	for i in Tuning.BUG_COUNT:
 		field.spawn_bug(worm.cell_set())
 
-# 월드 방향 입력. 받아들였으면 true.
-func press(dir: Vector3i) -> bool:
+# 조향 입력(Worm.Steer). 지렁이는 늘 앞으로 가고, 이 입력이 머리 방향을 지렁이 기준으로 꺾는다.
+# 받아들였으면 true. 출발 전 첫 입력은 바로 첫 꺾임이 되고, 그 뒤에는 큐에 쌓였다가 칸 경계에서 적용된다.
+func press(steer: int) -> bool:
 	if state == State.WAITING:
-		if dir == -worm.entries[0]:
-			return false  # 목 쪽으로는 출발할 수 없다
-		worm.head_exit = dir
+		worm.head_exit = Worm.turned(steer, worm.entries[0], worm.refs[0])
 		state = State.RUNNING
 		return true
-	if state != State.RUNNING:
+	if state != State.RUNNING or queue.size() >= Tuning.QUEUE_MAX:
 		return false
-	var last: Vector3i = queue.back() if not queue.is_empty() else worm.head_exit
-	if dir == last or dir == -last or queue.size() >= Tuning.QUEUE_MAX:
-		return false
-	queue.append(dir)
+	queue.append(steer)
 	return true
+
+# 큐 맨 앞 입력이 다음 칸에서 만들 나가는 방향(고개 예고 연출용). 큐가 비었으면 ZERO.
+func queued_exit() -> Vector3i:
+	if queue.is_empty():
+		return Vector3i.ZERO
+	var d := worm.head_exit
+	var r := d if d.y == 0 else worm.refs[0]
+	return Worm.turned(queue[0], d, r)
 
 func advance(delta: float) -> void:
 	if state != State.RUNNING or paused:
@@ -78,4 +82,5 @@ func _step() -> void:
 	worm.step(just_grew)
 	if just_grew:
 		field.spawn_bug(worm.cell_set())
-	worm.head_exit = queue.pop_front() if not queue.is_empty() else worm.entries[0]
+	# 새 칸의 출구: 큐의 입력을 이 칸으로 들어온 방향(entries[0])과 윗면 기준(refs[0])에서 꺾은 방향, 없으면 직진.
+	worm.head_exit = Worm.turned(queue.pop_front(), worm.entries[0], worm.refs[0]) if not queue.is_empty() else worm.entries[0]

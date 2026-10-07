@@ -30,9 +30,8 @@ func _ready() -> void:
 	add_child(field_view)
 	add_child(worm_view)
 	add_child(hud)
-	controller.rig = rig
 	hud.add_child(controller)
-	controller.direction_pressed.connect(_on_direction)
+	controller.steer_pressed.connect(_on_steer)
 	controller.turn_pressed.connect(_on_turn)
 	hud.turn_pressed.connect(_on_turn)
 	new_game()
@@ -60,11 +59,11 @@ func _process(delta: float) -> void:
 		_dead_time += delta
 		hud.show_restart(_dead_time >= Tuning.DEATH_DELAY)
 
-func _on_direction(screen_dir: int) -> void:
+func _on_steer(steer: int) -> void:
 	if game.state == Game.State.DEAD:
 		_restart_if_ready()
 		return
-	game.press(rig.world_dir(screen_dir))
+	game.press(steer)
 
 func _on_turn(dir: int) -> void:
 	if game.state != Game.State.DEAD:

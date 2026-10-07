@@ -101,7 +101,7 @@ func _head_transform(delta: float) -> Transform3D:
 	var want := 0.0
 	if game.state == Game.State.RUNNING and not game.queue.is_empty():
 		want = 1.0
-		_glance_dir = Vector3(game.queue[0])
+		_glance_dir = Vector3(game.queued_exit())
 	_glance = move_toward(_glance, want, delta * 8.0)
 	var axis := (-t.basis.z).cross(_glance_dir)
 	if _glance > 0.0 and axis.length() > 0.01:
