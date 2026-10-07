@@ -11,6 +11,33 @@ var entries: Array[Vector3i] = []
 var refs: Array[Vector3i] = []
 var head_exit := Vector3i.ZERO
 
+# 지렁이 기준 조향 입력. 지렁이는 늘 앞으로 가고, 이 입력이 머리 방향을 몸 기준으로 꺾는다.
+enum Steer { LEFT, RIGHT, UP, DOWN }
+
+# 진행 방향 d, 기준 수평 방향 r 일 때 머리의 윗면 방향. 수평이면 늘 +Y, 위로 가면 -r, 아래로 가면 r.
+# 화면에 그려지는 자세(WormPath.pose)와 같은 값이라, 조작의 "위"가 보이는 윗면과 어긋나지 않는다.
+static func up_of(d: Vector3i, r: Vector3i) -> Vector3i:
+	if d.y > 0:
+		return -r
+	if d.y < 0:
+		return r
+	return Vector3i.UP
+
+# 진행 방향 d, 기준 수평 방향 r 에서 steer 로 꺾은 새 진행 방향. 언제나 d 에 수직이다(뒤로는 못 간다).
+# 오른쪽은 d × 윗면 — 모델 정면이 -Z, 윗면이 +Y 일 때 오른쪽이 +X 인 것과 같은 규약이다.
+static func turned(steer: int, d: Vector3i, r: Vector3i) -> Vector3i:
+	var up := up_of(d, r)
+	var right := Vector3i(Vector3(d).cross(Vector3(up)))
+	match steer:
+		Steer.LEFT:
+			return -right
+		Steer.RIGHT:
+			return right
+		Steer.UP:
+			return up
+		_:
+			return -up
+
 # 머리부터 꼬리까지 이웃한 칸 목록으로 만든다. 꼬리 칸의 입구는 그 앞 칸의 입구와 같다고 본다.
 static func from_cells(path: Array[Vector3i]) -> Worm:
 	assert(path.size() >= 2, "지렁이는 두 칸 이상이어야 한다")

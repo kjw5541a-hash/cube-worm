@@ -12,6 +12,7 @@ func _initialize() -> void:
 	_test_pose_rules()
 	_test_basis_ends_and_tangent()
 	_test_u_turn_comes_out_upright()
+	_test_steer_matches_drawn_pose()
 	_test_random_play_inside_cells_and_continuous()
 	print("test_worm_path: OK")
 	quit()
@@ -66,6 +67,19 @@ func _test_u_turn_comes_out_upright() -> void:
 	# +X 로 가다 올라간 뒤(-X 가 윗면) 되돌아 -X 로 꺾는 칸.
 	var b := WormPath.basis(Y, -X, X, 1.0)
 	assert(_near(b.y, Vector3.UP), "되돌아 나온 머리는 바로 서야 한다: %s" % b.y)
+
+# 조향의 오른쪽·위는 화면에 그려지는 머리 자세의 오른쪽·윗면과 같아야 한다 — 조작이 보이는 것과 어긋나지 않게.
+func _test_steer_matches_drawn_pose() -> void:
+	for d in DIRS:
+		for r in [X, -X, Z, -Z]:
+			if d.y == 0 and r != d:
+				continue  # 수평으로 갈 때 기준 방향은 진행 방향 자신이다
+			var b := WormPath.pose(d, r)
+			var frame := "d=%s r=%s" % [d, r]
+			assert(_near(Vector3(Worm.turned(Worm.Steer.RIGHT, d, r)), b.x), "오른쪽이 그려진 머리의 오른쪽과 다르다 " + frame)
+			assert(_near(Vector3(Worm.turned(Worm.Steer.LEFT, d, r)), -b.x), "왼쪽이 그려진 머리의 왼쪽과 다르다 " + frame)
+			assert(_near(Vector3(Worm.turned(Worm.Steer.UP, d, r)), b.y), "위가 그려진 머리의 윗면과 다르다 " + frame)
+			assert(_near(Vector3(Worm.turned(Worm.Steer.DOWN, d, r)), -b.y), "아래가 그려진 머리의 배 쪽과 다르다 " + frame)
 
 # 아무렇게나 눌러 진행하며 (1) 모든 마디가 자기 칸 안에 있고 (2) 걸음이 바뀌는 순간 위치·자세가 이어지는지 본다.
 func _test_random_play_inside_cells_and_continuous() -> void:

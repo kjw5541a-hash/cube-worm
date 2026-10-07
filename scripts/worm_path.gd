@@ -29,12 +29,7 @@ static func tangent(d_in: Vector3i, d_out: Vector3i, a: float) -> Vector3:
 # 진행 방향 d, 기준 수평 방향 r 일 때의 자세. 모델 정면은 -Z.
 # 수평이면 윗면이 +Y, 수직이면 직전 수평 자세에서 피치만 한 자세다.
 static func pose(d: Vector3i, r: Vector3i) -> Basis:
-	var up := Vector3.UP
-	if d.y > 0:
-		up = -Vector3(r)
-	elif d.y < 0:
-		up = Vector3(r)
-	return Basis.looking_at(Vector3(d), up)
+	return Basis.looking_at(Vector3(d), Vector3(Worm.up_of(d, r)))
 
 static func exit_ref(d_out: Vector3i, r: Vector3i) -> Vector3i:
 	return d_out if d_out.y == 0 else r
