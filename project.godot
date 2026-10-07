@@ -1,0 +1,29 @@
+; Engine configuration file.
+config_version=5
+
+[application]
+
+config/name="큐브 지렁이"
+; 배포 워크플로가 빌드마다 날짜·브랜치·커밋으로 덮어쓴다. 화면 왼쪽 위에 그대로 나온다.
+config/version="dev"
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+
+[display]
+
+window/size/viewport_width=720
+window/size/viewport_height=1280
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=1
+
+[input_devices]
+
+; 컨트롤러는 터치 이벤트만 받는다. 데스크톱에서는 마우스 클릭도 터치로 들어오게 한다.
+pointing/emulate_touch_from_mouse=true
+
+[rendering]
+
+; 웹은 설정과 무관하게 Compatibility 로 돈다. 데스크톱 화면도 같게 하려고 처음부터 맞춘다.
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
