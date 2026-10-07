@@ -66,10 +66,10 @@ jobs:
       - name: Stamp version
         run: |
           set -euo pipefail
-          # 브랜치 이름도 박는다. 브랜치 빌드가 라이브를 덮어쓰므로, 지금
-          # 화면에 뜬 것이 main 인지 작업 중인 브랜치인지 눈으로 구별해야 한다.
+          # 빌드번호(push 마다 1 씩 오른다)와 브랜치 이름도 박는다. 브랜치 빌드가 라이브를
+          # 덮어쓰므로, 지금 화면에 뜬 것이 main 인지 작업 중인 브랜치인지 눈으로 구별해야 한다.
           slug=$(printf '%s' "$GITHUB_REF_NAME" | tr -c 'A-Za-z0-9' '-' | cut -c1-24)
-          echo "VERSION=$(date -u +%Y-%m-%d) $slug ${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+          echo "VERSION=build ${GITHUB_RUN_NUMBER} $(date -u +%Y-%m-%d) $slug ${GITHUB_SHA::7}" >> "$GITHUB_ENV"
           echo "BASENAME=cube-worm-$(date -u +%Y%m%d)-$slug-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
 
       - name: Export Web build
