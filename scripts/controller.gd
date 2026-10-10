@@ -17,6 +17,7 @@ const PAD: Array[int] = [Worm.Steer.RIGHT, Worm.Steer.UP, Worm.Steer.LEFT, Worm.
 # D 오른쪽, W 위, A 왼쪽, S 아래. 물리 키 위치라 한/영 상태와 무관하다. 값은 칸 번호.
 const KEYS := {KEY_D: 0, KEY_W: 1, KEY_A: 2, KEY_S: 3}
 
+var vertical := true  # 1층 맵에서는 위·아래 버튼을 끈다
 var _flash: Array[float] = [0.0, 0.0, 0.0, 0.0]
 
 func _ready() -> void:
@@ -60,6 +61,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		turn_pressed.emit(1)
 
 func _press(i: int) -> void:
+	if not vertical and (PAD[i] == Worm.Steer.UP or PAD[i] == Worm.Steer.DOWN):
+		return
 	_flash[i] = FLASH
 	steer_pressed.emit(PAD[i])
 
@@ -73,6 +76,9 @@ func _draw() -> void:
 	for i in 4:
 		var dir := button_dir(i)
 		var p := c + dir * RING
+		if not vertical and (PAD[i] == Worm.Steer.UP or PAD[i] == Worm.Steer.DOWN):
+			draw_arc(p, BUTTON, 0.0, TAU, 48, Color(1, 1, 1, 0.12), 2.0, true)  # 꺼진 버튼은 테두리만 흐리게
+			continue
 		var lit := _flash[i] > 0.0
 		draw_circle(p, BUTTON, Color(1, 0.85, 0.5, 0.55) if lit else Color(1, 1, 1, 0.12))
 		draw_arc(p, BUTTON, 0.0, TAU, 48, Color(1, 1, 1, 0.45), 2.0, true)

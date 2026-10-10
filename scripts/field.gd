@@ -2,18 +2,20 @@ class_name Field
 extends RefCounted
 
 # 상자 경계, 바위, 벌레. 난수는 시드를 고정할 수 있게 밖에서 받는다.
-var size: int
+var size: int      # 가로·세로 칸 수
+var height: int    # 높이 칸 수(레벨 N 이면 N)
 var rocks := {}                     # Vector3i -> true
 var bugs: Array[Vector3i] = []
 var kinds: Array[int] = []          # bugs 와 같은 순서의 벌레 종류(0 ~ BUG_COUNT-1). 둘은 늘 같이 간다
 var rng: RandomNumberGenerator
 
-func _init(box_size: int, random: RandomNumberGenerator) -> void:
+func _init(box_size: int, random: RandomNumberGenerator, box_height := -1) -> void:
 	size = box_size
+	height = box_size if box_height < 0 else box_height
 	rng = random
 
 func in_bounds(c: Vector3i) -> bool:
-	return c.x >= 0 and c.y >= 0 and c.z >= 0 and c.x < size and c.y < size and c.z < size
+	return c.x >= 0 and c.y >= 0 and c.z >= 0 and c.x < size and c.y < height and c.z < size
 
 func has_rock(c: Vector3i) -> bool:
 	return rocks.has(c)
@@ -25,7 +27,7 @@ func has_bug(c: Vector3i) -> bool:
 func empty_cells(blocked: Dictionary) -> Array[Vector3i]:
 	var out: Array[Vector3i] = []
 	for x in size:
-		for y in size:
+		for y in height:
 			for z in size:
 				var c := Vector3i(x, y, z)
 				if not rocks.has(c) and not bugs.has(c) and not blocked.has(c):

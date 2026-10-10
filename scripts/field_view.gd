@@ -4,16 +4,19 @@ extends Node3D
 # 흙 상자, 바위, 벌레(종류 3가지), 머리 층 판, 벌레 고리·기둥, 머리로 빨려 드는 벌레.
 
 const ROCK_MODEL := "res://assets/models/rock.glb"
+const MAX_PER_KIND := 3  # 한 종류 벌레가 한 판에 가장 많이 나오는 수(레벨 7~8)
 
 var game: Game
 var box := MeshInstance3D.new()
 var rocks := MultiMeshInstance3D.new()
 var plane := MeshInstance3D.new()
-var bugs: Array[MeshInstance3D] = []    # 종류마다 하나
+var bugs: Array[MeshInstance3D] = []    # 종류 k 의 j 번째 벌레 = k * MAX_PER_KIND + j
 var rings: Array[MeshInstance3D] = []
 var stems: Array[MeshInstance3D] = []
 var ghosts: Array[MeshInstance3D] = []  # 먹히는 중인 벌레(종류마다 하나)
 var _time := 0.0
+var _box_mesh: BoxMesh
+var _soil: ShaderMaterial
 
 # 칸마다 정해진 무작위 90° 회전: 같은 바위도 칸마다 다르게 보이고, 같은 판이면 늘 같다.
 static func rock_basis(c: Vector3i) -> Basis:
@@ -21,16 +24,14 @@ static func rock_basis(c: Vector3i) -> Basis:
 	return Basis.from_euler(Vector3(h % 4, (h / 4) % 4, (h / 16) % 4) * (PI * 0.5))
 
 func _init() -> void:
-	var half := Tuning.BOX * 0.5
 	var bm := BoxMesh.new()
-	bm.size = Vector3.ONE * Tuning.BOX
+	_box_mesh = bm
 	# 면을 안쪽으로 뒤집으면 뒷면 컬링이 어느 시점에서든 가까운 벽 2개와 윗면을 알아서 숨긴다.
 	bm.flip_faces = true
 	box.mesh = bm
-	box.position = Vector3.ONE * half
-	var soil := ShaderMaterial.new()
-	soil.shader = preload("res://shaders/soil_box.gdshader")
-	box.material_override = soil
+	_soil = ShaderMaterial.new()
+	_soil.shader = preload("res://shaders/soil_box.gdshader")
+	box.material_override = _soil
 	add_child(box)
 
 	var rock := Models.load_model(ROCK_MODEL)
@@ -61,11 +62,12 @@ func _init() -> void:
 		var marker := StandardMaterial3D.new()
 		marker.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		marker.albedo_color = Skins.BUGS[k]["color"]  # 고리·기둥 색은 종류 색
-		bugs.append(_bug_node(model, true))
+		for j in MAX_PER_KIND:
+			bugs.append(_bug_node(model, true))
+			rings.append(_mesh(ring_mesh, marker))
+			stems.append(_mesh(stem_mesh, marker))
 		ghosts.append(_bug_node(model, false))
 		ghosts[k].visible = false
-		rings.append(_mesh(ring_mesh, marker))
-		stems.append(_mesh(stem_mesh, marker))
 
 # 벌레 메시에 공용 셰이더 재질을 씌운다(은은하게 빛난다). xray 면 가려졌을 때 비친다.
 func _bug_node(model: Dictionary, xray: bool) -> MeshInstance3D:
@@ -85,6 +87,11 @@ func _mesh(mesh: Mesh, mat: Material) -> MeshInstance3D:
 
 func setup(g: Game) -> void:
 	game = g
+	# 상자는 가로·세로 BOX, 높이는 이 판의 층 수다. 바닥(y=0)은 늘 같은 자리에 있다.
+	var h := float(g.height)
+	_box_mesh.size = Vector3(Tuning.BOX, h, Tuning.BOX)
+	box.position = Vector3(Tuning.BOX * 0.5, h * 0.5, Tuning.BOX * 0.5)
+	_soil.set_shader_parameter("box_size", h)
 	var rm := rocks.multimesh
 	rm.instance_count = g.field.rocks.size()
 	var i := 0
@@ -104,26 +111,31 @@ func _update() -> void:
 	var half := Tuning.BOX * 0.5
 	plane.position = Vector3(half, head_y, half)
 	for k in Tuning.BUG_COUNT:
-		var idx := game.field.kinds.find(k)
-		var has := idx >= 0
-		bugs[k].visible = has
-		rings[k].visible = has
-		stems[k].visible = false
-		if not has:
-			continue
-		var c := game.field.bugs[idx]
-		var p := WormPath.center(c)
-		# 꼼지락: 칸마다 위상을 달리해 셋이 같이 움직이지 않게 한다. 위아래로 살짝 뜨고, 좌우로 몸을 튼다.
-		bugs[k].position = p + Vector3(0, 0.06 * sin(_time * 3.0 + c.x + c.z * 1.7), 0)
-		bugs[k].rotation.y = 0.35 * sin(_time * 2.2 + c.x * 1.3 + c.y)
-		_flicker(bugs[k], c)
-		rings[k].position = Vector3(p.x, head_y, p.z)
-		# 기둥은 꼼지락을 뺀 칸 중심으로 잰다. 같은 층에서 기둥이 깜빡이지 않게.
-		var gap := p.y - head_y
-		if absf(gap) > 0.05:
-			stems[k].visible = true
-			stems[k].position = Vector3(p.x, head_y + gap * 0.5, p.z)
-			stems[k].scale = Vector3(1, absf(gap), 1)
+		var cells: Array[Vector3i] = []
+		for i in game.field.bugs.size():
+			if game.field.kinds[i] == k:
+				cells.append(game.field.bugs[i])
+		for n in MAX_PER_KIND:
+			var b := k * MAX_PER_KIND + n
+			var has := n < cells.size()
+			bugs[b].visible = has
+			rings[b].visible = has
+			stems[b].visible = false
+			if not has:
+				continue
+			var c := cells[n]
+			var p := WormPath.center(c)
+			# 꼼지락: 칸마다 위상을 달리해 같이 움직이지 않게 한다. 위아래로 살짝 뜨고, 좌우로 몸을 튼다.
+			bugs[b].position = p + Vector3(0, 0.06 * sin(_time * 3.0 + c.x + c.z * 1.7), 0)
+			bugs[b].rotation.y = 0.35 * sin(_time * 2.2 + c.x * 1.3 + c.y)
+			_flicker(bugs[b], c)
+			rings[b].position = Vector3(p.x, head_y, p.z)
+			# 기둥은 꼼지락을 뺀 칸 중심으로 잰다. 같은 층에서 기둥이 깜빡이지 않게.
+			var gap := p.y - head_y
+			if absf(gap) > 0.05:
+				stems[b].visible = true
+				stems[b].position = Vector3(p.x, head_y + gap * 0.5, p.z)
+				stems[b].scale = Vector3(1, absf(gap), 1)
 	_update_ghost()
 
 # 벌레의 은은한 발광이 느리게 깜빡인다.

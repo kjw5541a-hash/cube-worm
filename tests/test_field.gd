@@ -6,6 +6,7 @@ func _initialize() -> void:
 	_test_bug_spawns_only_on_empty_cells()
 	_test_spawn_fails_when_full()
 	_test_kinds_stay_parallel()
+	_test_height()
 	print("test_field: OK")
 	quit()
 
@@ -64,3 +65,12 @@ func _test_kinds_stay_parallel() -> void:
 	assert(f.bugs.size() == 2 and f.kinds == ([2, 1] as Array[int]), "지우면 종류도 같이 지워진다: %s" % [f.kinds])
 	assert(f.kind_at(gone) == -1, "벌레가 없는 칸은 -1")
 	assert(f.has_bug(f.bugs[0]) and not f.has_bug(gone))
+
+# 높이가 가로·세로와 다를 수 있다: 범위와 빈 칸이 높이를 따른다.
+func _test_height() -> void:
+	var rng := RandomNumberGenerator.new()
+	var f := Field.new(8, rng, 2)
+	assert(f.in_bounds(Vector3i(7, 1, 7)) and not f.in_bounds(Vector3i(0, 2, 0)), "높이 2: y 는 0~1")
+	assert(f.empty_cells({}).size() == 8 * 2 * 8, "빈 칸 수 = 가로 × 높이 × 세로")
+	assert(Field.new(8, rng).height == 8, "높이를 안 주면 정육면체")
+

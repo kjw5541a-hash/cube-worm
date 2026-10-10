@@ -10,6 +10,8 @@ var worm_view := WormView.new()
 var hud := Hud.new()
 var controller := Controller.new()
 var picker := SkinPicker.new()
+var level := 1          # 지금 판의 레벨(= 맵 높이)
+var base_score := 0     # 이 레벨을 시작할 때의 점수. 죽으면 여기서 다시 시작한다
 var _dead_time := 0.0
 var _was_dead := false
 
@@ -43,8 +45,13 @@ func _ready() -> void:
 	new_game()
 
 func new_game() -> void:
-	game = Game.new(randi(), perf_requested())
+	game = Game.new(randi(), perf_requested(), level)
+	game.score = base_score
 	game.ate.connect(_on_ate)
+	rig.position = Vector3(Tuning.BOX * 0.5, game.height * 0.5, Tuning.BOX * 0.5)  # 시점은 그대로, 상자 중심을 본다
+	controller.vertical = game.height > 1
+	hud.set_level(game.level)
+	hud.show_clear(false)
 	field_view.setup(game)
 	worm_view.setup(game)
 	_dead_time = 0.0
@@ -70,6 +77,9 @@ func _process(delta: float) -> void:
 			rig.shake()
 		_dead_time += delta
 		hud.show_restart(_dead_time >= Tuning.DEATH_DELAY)
+	elif game.state == Game.State.CLEARED:
+		_dead_time += delta
+		hud.show_clear(_dead_time >= Tuning.CLEAR_DELAY)
 
 func _on_skin_changed(index: int) -> void:
 	worm_view.apply_skin(index)
@@ -81,7 +91,7 @@ func _on_ate(kind: int, points: int, cell: Vector3i) -> void:
 	hud.pop("+%d" % points, at, Skins.BUGS[kind]["color"])
 
 func _on_steer(steer: int) -> void:
-	if game.state == Game.State.DEAD:
+	if game.state == Game.State.DEAD or game.state == Game.State.CLEARED:
 		_restart_if_ready()
 		return
 	game.press(steer)
@@ -92,9 +102,14 @@ func _on_turn(dir: int) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	var t := event as InputEventScreenTouch
-	if t != null and t.pressed and game.state == Game.State.DEAD:
+	if t != null and t.pressed and (game.state == Game.State.DEAD or game.state == Game.State.CLEARED):
 		_restart_if_ready()
 
 func _restart_if_ready() -> void:
-	if _dead_time >= Tuning.DEATH_DELAY:
+	if game.state == Game.State.CLEARED:
+		if _dead_time >= Tuning.CLEAR_DELAY:
+			base_score = game.score  # 클리어한 점수는 이어진다
+			level = mini(level + 1, Tuning.LEVEL_MAX)
+			new_game()
+	elif _dead_time >= Tuning.DEATH_DELAY:
 		new_game()

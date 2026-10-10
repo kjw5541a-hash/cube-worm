@@ -8,6 +8,8 @@ signal turn_pressed(dir: int)
 var score_label := Label.new()
 var info_label := Label.new()
 var restart_label := Label.new()
+var level_label := Label.new()
+var clear_label := Label.new()
 var _version := str(ProjectSettings.get_setting("application/config/version", "dev"))
 
 func _ready() -> void:
@@ -25,6 +27,16 @@ func _ready() -> void:
 	restart_label.offset_top = 130
 	restart_label.visible = false
 	add_child(restart_label)
+	level_label.position = Vector2(262, 20)
+	level_label.add_theme_font_size_override("font_size", 40)
+	add_child(level_label)
+	clear_label.text = "레벨 클리어!\n탭하면 다음 레벨"
+	clear_label.add_theme_font_size_override("font_size", 44)
+	clear_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	clear_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	clear_label.offset_top = 130
+	clear_label.visible = false
+	add_child(clear_label)
 	for d in [-1, 1]:
 		var b := TurnButton.new(d)
 		b.set_anchors_preset(Control.PRESET_TOP_RIGHT)
@@ -37,6 +49,12 @@ func set_score(v: int) -> void:
 
 func show_restart(on: bool) -> void:
 	restart_label.visible = on
+
+func set_level(n: int) -> void:
+	level_label.text = "레벨 %d" % n
+
+func show_clear(on: bool) -> void:
+	clear_label.visible = on
 
 # 벌레를 먹은 점수 "+N" 을 화면 위치 at(뷰포트 좌표)에서 위로 떠올렸다가 사라지게 한다.
 func pop(text: String, at: Vector2, color := Color(1.0, 0.9, 0.45)) -> Label:

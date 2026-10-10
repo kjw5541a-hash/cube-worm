@@ -3,11 +3,15 @@ extends RefCounted
 
 # 규칙 전부: 입력 큐, 진행률, 걸음, 먹기, 죽음. 노드를 쓰지 않아 헤드리스로 검사한다.
 
-enum State { WAITING, RUNNING, DEAD }
+enum State { WAITING, RUNNING, DEAD, CLEARED }
 
 # 벌레를 먹은 순간(걸음 이벤트 안). 종류, 얻은 점수, 먹은 칸.
 signal ate(kind: int, points: int, cell: Vector3i)
+# 판의 벌레를 전부 먹었다.
+signal cleared
 
+var level := Tuning.LEVEL_MAX
+var height := Tuning.BOX
 var worm: Worm
 var field: Field
 var state := State.WAITING
@@ -22,10 +26,25 @@ var eat_steps: Array[int] = []  # 벌레를 먹은 걸음 번호. 먹은 덩어�
 var eaten_cell := Vector3i.ZERO # 가장 최근에 먹은 벌레의 칸
 var eaten_kind := -1            # 가장 최근에 먹은 벌레의 종류
 
-func _init(seed: int = 0, perf := false) -> void:
+# 레벨 N 의 맵 높이 = N 칸(최대 LEVEL_MAX).
+static func height_of(lv: int) -> int:
+	return clampi(lv, 1, Tuning.LEVEL_MAX)
+
+# 종류마다 나오는 벌레 수: 레벨 1~3 은 1, 4~6 은 2, 7~8 은 3. 한 판에 이만큼만 나오고 다시 생기지 않는다.
+static func bugs_per_kind(lv: int) -> int:
+	return clampi((height_of(lv) - 1) / 3 + 1, 1, 3)
+
+# 바위 수: 레벨 1 은 4개, 레벨마다 하나씩, 최대 ROCK_COUNT.
+static func rocks_of(lv: int) -> int:
+	return mini(3 + height_of(lv), Tuning.ROCK_COUNT)
+
+func _init(seed: int = 0, perf := false, lv: int = Tuning.LEVEL_MAX) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
-	field = Field.new(Tuning.BOX, rng)
+	level = height_of(Tuning.LEVEL_MAX if perf else lv)
+	height = level
+	field = Field.new(Tuning.BOX, rng, height)
+	var per_kind := 1 if perf else bugs_per_kind(level)
 	if perf:
 		var path := Worm.serpentine_path(Tuning.BOX)
 		# 상자를 줄여도 벌레 놓을 칸은 남긴다.
@@ -35,14 +54,18 @@ func _init(seed: int = 0, perf := false) -> void:
 			body.append(path[i])
 		worm = Worm.from_cells(body)
 	else:
-		worm = Worm.straight(Tuning.START_HEAD, Tuning.START_DIR, Tuning.START_LENGTH)
-		field.place_rocks(Tuning.ROCK_COUNT, worm.cells, Tuning.ROCK_CLEAR_RADIUS)
-	for k in Tuning.BUG_COUNT:  # 종류마다 한 마리씩
-		field.spawn_bug(worm.cell_set(), k)
+		var start := Vector3i(Tuning.START_HEAD.x, height / 2, Tuning.START_HEAD.z)  # 높이의 가운데 층
+		worm = Worm.straight(start, Tuning.START_DIR, Tuning.START_LENGTH)
+		field.place_rocks(rocks_of(level), worm.cells, Tuning.ROCK_CLEAR_RADIUS)
+	for k in Tuning.BUG_COUNT:  # 종류마다 per_kind 마리
+		for j in per_kind:
+			field.spawn_bug(worm.cell_set(), k)
 
 # 조향 입력(Worm.Steer). 지렁이는 늘 앞으로 가고, 이 입력이 머리 방향을 지렁이 기준으로 꺾는다.
 # 받아들였으면 true. 출발 전 첫 입력은 바로 첫 꺾임이 되고, 그 뒤에는 큐에 쌓였다가 칸 경계에서 적용된다.
 func press(steer: int) -> bool:
+	if height == 1 and (steer == Worm.Steer.UP or steer == Worm.Steer.DOWN):
+		return false  # 1층 맵에는 위아래가 없다
 	if state == State.WAITING:
 		worm.head_exit = Worm.turned(steer, worm.entries[0], worm.refs[0])
 		state = State.RUNNING
@@ -61,6 +84,9 @@ func queued_exit() -> Vector3i:
 	return Worm.turned(queue[0], d, r)
 
 func advance(delta: float) -> void:
+	if state == State.CLEARED:  # 마지막 벌레를 삼키던 걸음만 마저 끝내고 선다
+		alpha = minf(alpha + minf(speed * delta, Tuning.MAX_STEP_PER_FRAME), 0.99)
+		return
 	if state != State.RUNNING or paused:
 		return
 	alpha += minf(speed * delta, Tuning.MAX_STEP_PER_FRAME)
@@ -102,7 +128,9 @@ func _step() -> void:
 		eaten_kind = kind
 	worm.step(just_grew)
 	if just_grew:
-		field.spawn_bug(worm.cell_set(), kind)  # 먹은 종류가 빈 칸 하나에 다시 생긴다
 		ate.emit(kind, points, next)
+		if field.bugs.is_empty():
+			state = State.CLEARED
+			cleared.emit()
 	# 새 칸의 출구: 큐의 입력을 이 칸으로 들어온 방향(entries[0])과 윗면 기준(refs[0])에서 꺾은 방향, 없으면 직진.
 	worm.head_exit = Worm.turned(queue.pop_front(), worm.entries[0], worm.refs[0]) if not queue.is_empty() else worm.entries[0]

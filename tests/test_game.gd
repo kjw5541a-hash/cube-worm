@@ -26,6 +26,9 @@ func _initialize() -> void:
 	_test_eating()
 	_test_scores_by_kind()
 	_test_ate_signal()
+	_test_levels()
+	_test_clear()
+	_test_one_floor_ignores_vertical()
 	_test_progress_and_eat_marks()
 	_test_speed_cap()
 	_test_paused_freezes()
@@ -222,13 +225,8 @@ func _test_eating() -> void:
 	assert(g.worm.cells[3] == Vector3i(6, 4, 4), "꼬리가 제자리에 남는다")
 	assert(g.just_grew)
 	assert(is_equal_approx(g.speed, Tuning.SPEED_START + Tuning.SPEED_STEP), "먹으면 속도가 오른다: %f" % g.speed)
-	assert(g.field.bugs.size() == 3, "먹으면 새 벌레가 생겨 3마리를 유지한다")
+	assert(g.field.bugs.size() == 2 and g.state == Game.State.RUNNING, "먹은 벌레만 사라지고 다시 생기지 않는다")
 	assert(not g.field.bugs.has(Vector3i(3, 4, 4)), "먹은 벌레는 사라진다")
-	var ks := g.field.kinds.duplicate()
-	ks.sort()
-	assert(ks == ([0, 1, 2] as Array[int]), "먹은 종류가 다시 생겨 종류마다 한 마리씩: %s" % [ks])
-	for b in g.field.bugs:
-		assert(not g.worm.cell_set().has(b), "새 벌레가 지렁이 위에 생겼다")
 	_one_step(g)
 	assert(not g.just_grew, "다음 걸음에는 자라지 않는다")
 	assert(g.worm.length() == 4)
@@ -258,8 +256,7 @@ func _test_new_game_layout() -> void:
 		var g := Game.new(seed)
 		assert(g.worm.length() == Tuning.START_LENGTH and g.worm.head() == Tuning.START_HEAD)
 		assert(g.field.rocks.size() == Tuning.ROCK_COUNT, "바위 수")
-		assert(g.field.bugs.size() == Tuning.BUG_COUNT, "벌레 수")
-		assert(g.field.kinds == ([0, 1, 2] as Array[int]), "종류마다 한 마리씩: %s" % [g.field.kinds])
+		assert(g.field.bugs.size() == Tuning.BUG_COUNT * Game.bugs_per_kind(Tuning.LEVEL_MAX), "벌레 수")
 		var worm := g.worm.cell_set()
 		for b in g.field.bugs:
 			assert(not worm.has(b) and not g.field.rocks.has(b), "벌레는 빈 칸에만")
@@ -273,7 +270,7 @@ func _test_bugs_stay_valid_in_random_play() -> void:
 	var games := 0
 	var steps := 0
 	while steps < 3000:
-		if g.state == Game.State.DEAD:
+		if g.state == Game.State.DEAD or g.state == Game.State.CLEARED:
 			games += 1
 			g = Game.new(games)
 		if rng.randf() < 0.08 or g.state == Game.State.WAITING:
@@ -282,10 +279,7 @@ func _test_bugs_stay_valid_in_random_play() -> void:
 		g.advance(FRAME)
 		if g.worm.head() != before:
 			steps += 1
-			assert(g.field.bugs.size() == Tuning.BUG_COUNT, "벌레 수가 늘 같다")
-			var ks := g.field.kinds.duplicate()
-			ks.sort()
-			assert(ks == ([0, 1, 2] as Array[int]), "벌레는 늘 종류마다 한 마리씩이다: %s" % [ks])
+			assert(g.field.bugs.size() == g.field.kinds.size() and g.field.bugs.size() <= 9, "벌레와 종류 목록은 같이 간다")
 			assert(g.eat_steps.size() <= g.worm.length() + 3, "꼬리를 지난 먹은 기록은 버린다: %d" % g.eat_steps.size())
 			var worm := g.worm.cell_set()
 			assert(worm.size() == g.worm.length(), "지렁이가 자기 칸과 겹친다")
@@ -317,7 +311,7 @@ func _test_scores_by_kind() -> void:
 		assert(g.score == Tuning.BUG_SCORES[kind], "종류 %d 의 점수: %d" % [kind, g.score])
 		assert(g.worm.length() == 4, "점수와 무관하게 한 마디 자란다: 종류 %d" % kind)
 		assert(is_equal_approx(g.speed, Tuning.SPEED_START + Tuning.SPEED_STEP), "속도 상승도 같다: 종류 %d" % kind)
-		assert(g.field.kinds == ([kind] as Array[int]), "먹은 종류가 다시 생긴다: 종류 %d, %s" % [kind, g.field.kinds])
+		assert(g.state == Game.State.CLEARED, "마지막 벌레를 먹으면 클리어: 종류 %d" % kind)
 	assert(Tuning.BUG_SCORES.size() == Tuning.BUG_COUNT and seen.size() == Tuning.BUG_COUNT, "점수는 종류마다 다르다")
 
 # 먹는 순간 ate 신호가 한 번, 종류·점수·칸과 함께 온다.
@@ -344,3 +338,54 @@ func _test_progress_and_eat_marks() -> void:
 	_one_step(g)
 	assert(g.steps == 1 and g.eat_steps == ([1] as Array[int]), "먹은 걸음 번호를 기록한다: %s" % [g.eat_steps])
 	assert(g.progress() >= 1.0 and g.progress() < 2.0, "한 칸 넘긴 뒤 진행값: %f" % g.progress())
+
+# 레벨 N 의 맵은 높이 N 칸이고, 지렁이는 가운데 층에서 시작하며, 벌레·바위 수가 레벨로 정해진다.
+func _test_levels() -> void:
+	var rocks: Array[int] = []
+	for lv in range(1, Tuning.LEVEL_MAX + 1):
+		var g := Game.new(lv, false, lv)
+		assert(g.height == lv and g.field.height == lv, "레벨 %d 의 높이" % lv)
+		assert(g.worm.head().y == lv / 2, "가운데 층에서 시작: 레벨 %d" % lv)
+		for c in g.worm.cells:
+			assert(g.field.in_bounds(c), "지렁이는 맵 안에서 시작: 레벨 %d" % lv)
+		for r in g.field.rocks:
+			assert(r.y < lv, "바위는 맵 안: 레벨 %d" % lv)
+		for b in g.field.bugs:
+			assert(b.y < lv and not g.field.has_rock(b), "벌레는 맵 안의 빈 칸: 레벨 %d" % lv)
+		assert(g.field.bugs.size() == 3 * Game.bugs_per_kind(lv), "벌레 수: 레벨 %d" % lv)
+		for k in 3:
+			assert(g.field.kinds.count(k) == Game.bugs_per_kind(lv), "종류마다 같은 수: 레벨 %d" % lv)
+		rocks.append(g.field.rocks.size())
+	assert(rocks[0] == 4 and rocks[7] == Tuning.ROCK_COUNT and rocks == rocks.duplicate() and rocks[1] > rocks[0], "바위는 레벨 1 에서 4개, 레벨마다 늘어 최대 ROCK_COUNT: %s" % [rocks])
+	assert(Game.height_of(0) == 1 and Game.height_of(99) == Tuning.LEVEL_MAX, "레벨은 1 ~ LEVEL_MAX 로 맞춘다")
+
+# 판의 벌레를 전부 먹으면 클리어 신호가 한 번 오고 멈춘다.
+func _test_clear() -> void:
+	var g := _clean()
+	_bugs(g, [[Vector3i(3, 4, 4), 0], [Vector3i(2, 4, 4), 1]])
+	var fired := [0]
+	g.cleared.connect(func() -> void: fired[0] += 1)
+	_go(g, -X)
+	_one_step(g)
+	assert(g.state == Game.State.RUNNING and fired[0] == 0, "벌레가 남아 있으면 계속")
+	_one_step(g)
+	assert(g.state == Game.State.CLEARED and fired[0] == 1, "전부 먹으면 클리어 신호 한 번")
+	assert(g.score == Tuning.BUG_SCORES[0] + Tuning.BUG_SCORES[1], "점수는 종류별 그대로")
+	var head := g.worm.head()
+	for i in 200:
+		g.advance(FRAME)
+	assert(g.worm.head() == head and g.alpha < 1.0, "클리어 뒤에는 더 나아가지 않는다")
+	assert(not g.press(Worm.Steer.LEFT), "클리어 뒤에는 입력을 받지 않는다")
+
+# 1층 맵에는 위아래가 없어서 ▲▼ 입력은 무시되고 죽지 않는다.
+func _test_one_floor_ignores_vertical() -> void:
+	var g := Game.new(5, false, 1)
+	assert(not g.press(Worm.Steer.UP) and not g.press(Worm.Steer.DOWN), "1층에서 위아래 입력은 받지 않는다")
+	assert(g.state == Game.State.WAITING, "위아래를 눌러도 출발하지 않는다")
+	assert(g.press(Worm.Steer.LEFT) and g.state == Game.State.RUNNING, "좌우는 받는다")
+	for i in 300:
+		g.advance(FRAME)
+		if g.state == Game.State.DEAD:
+			break
+	assert(g.worm.head().y == 0, "1층에서는 높이가 바뀌지 않는다")
+

@@ -13,6 +13,8 @@ const SPEED_STEP := 0.1                     # 벌레 한 마리마다
 const SPEED_MAX := 6.0
 const MAX_STEP_PER_FRAME := 1.0 / 3.0       # 한 프레임에 머리가 나아가는 최대 칸
 
+const LEVEL_MAX := 8                       # 레벨 N 의 맵 높이는 N 칸. 8 레벨이 정육면체(BOX 칸)다
+const CLEAR_DELAY := 0.8                    # 클리어 뒤 다음 레벨 입력을 받기까지(초)
 const BUG_COUNT := 3                        # 벌레 종류 수. 종류마다 한 마리씩 항상 있다(= BUG_SCORES.size())
 const BUG_SCORES: Array[int] = [1, 2, 3]    # 종류별 점수: 크림·더듬이·반딧불. 성장과 속도 상승은 종류와 무관하다
 const ROCK_COUNT := 8
