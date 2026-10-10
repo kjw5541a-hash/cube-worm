@@ -24,6 +24,9 @@ func _initialize() -> void:
 	_test_tail_follow_allowed()
 	_test_stop_before_obstacle_every_frame()
 	_test_eating()
+	_test_scores_by_kind()
+	_test_ate_signal()
+	_test_progress_and_eat_marks()
 	_test_speed_cap()
 	_test_paused_freezes()
 	_test_new_game_layout()
@@ -37,6 +40,7 @@ func _clean(head := Vector3i(4, 4, 4), length := 3) -> Game:
 	var g := Game.new(1)
 	g.field.rocks.clear()
 	g.field.bugs.clear()
+	g.field.kinds.clear()
 	g.worm = Worm.straight(head, -X, length)
 	return g
 
@@ -45,6 +49,14 @@ func _clean(head := Vector3i(4, 4, 4), length := 3) -> Game:
 func _go(g: Game, dir: Vector3i) -> void:
 	g.state = Game.State.RUNNING
 	g.worm.head_exit = dir
+
+# 판의 벌레를 [칸, 종류] 쌍 목록으로 바꿔 놓는다(bugs 와 kinds 는 늘 같이 간다).
+func _bugs(g: Game, list: Array) -> void:
+	g.field.bugs.clear()
+	g.field.kinds.clear()
+	for row in list:
+		g.field.bugs.append(row[0])
+		g.field.kinds.append(row[1])
 
 # 머리가 한 칸 나아갈 때까지 돌린다.
 func _one_step(g: Game) -> void:
@@ -202,16 +214,19 @@ func _test_stop_before_obstacle_every_frame() -> void:
 
 func _test_eating() -> void:
 	var g := _clean()
-	g.field.bugs.assign([Vector3i(3, 4, 4), Vector3i(0, 0, 0), Vector3i(7, 7, 7)])
+	_bugs(g, [[Vector3i(3, 4, 4), 0], [Vector3i(0, 0, 0), 1], [Vector3i(7, 7, 7), 2]])
 	_go(g, -X)
 	_one_step(g)
-	assert(g.score == 1, "벌레 한 마리 = 1점")
+	assert(g.score == Tuning.BUG_SCORES[0], "크림(종류 0) 한 마리의 점수")
 	assert(g.worm.length() == 4, "한 마디 자란다")
 	assert(g.worm.cells[3] == Vector3i(6, 4, 4), "꼬리가 제자리에 남는다")
 	assert(g.just_grew)
 	assert(is_equal_approx(g.speed, Tuning.SPEED_START + Tuning.SPEED_STEP), "먹으면 속도가 오른다: %f" % g.speed)
 	assert(g.field.bugs.size() == 3, "먹으면 새 벌레가 생겨 3마리를 유지한다")
 	assert(not g.field.bugs.has(Vector3i(3, 4, 4)), "먹은 벌레는 사라진다")
+	var ks := g.field.kinds.duplicate()
+	ks.sort()
+	assert(ks == ([0, 1, 2] as Array[int]), "먹은 종류가 다시 생겨 종류마다 한 마리씩: %s" % [ks])
 	for b in g.field.bugs:
 		assert(not g.worm.cell_set().has(b), "새 벌레가 지렁이 위에 생겼다")
 	_one_step(g)
@@ -221,7 +236,7 @@ func _test_eating() -> void:
 func _test_speed_cap() -> void:
 	var g := _clean()
 	g.speed = Tuning.SPEED_MAX - Tuning.SPEED_STEP * 0.5
-	g.field.bugs.assign([Vector3i(3, 4, 4), Vector3i(2, 4, 4)])
+	_bugs(g, [[Vector3i(3, 4, 4), 0], [Vector3i(2, 4, 4), 0]])
 	_go(g, -X)
 	_one_step(g)
 	assert(g.speed == Tuning.SPEED_MAX, "최대 속도에서 멈춘다: %f" % g.speed)
@@ -244,6 +259,7 @@ func _test_new_game_layout() -> void:
 		assert(g.worm.length() == Tuning.START_LENGTH and g.worm.head() == Tuning.START_HEAD)
 		assert(g.field.rocks.size() == Tuning.ROCK_COUNT, "바위 수")
 		assert(g.field.bugs.size() == Tuning.BUG_COUNT, "벌레 수")
+		assert(g.field.kinds == ([0, 1, 2] as Array[int]), "종류마다 한 마리씩: %s" % [g.field.kinds])
 		var worm := g.worm.cell_set()
 		for b in g.field.bugs:
 			assert(not worm.has(b) and not g.field.rocks.has(b), "벌레는 빈 칸에만")
@@ -267,6 +283,10 @@ func _test_bugs_stay_valid_in_random_play() -> void:
 		if g.worm.head() != before:
 			steps += 1
 			assert(g.field.bugs.size() == Tuning.BUG_COUNT, "벌레 수가 늘 같다")
+			var ks := g.field.kinds.duplicate()
+			ks.sort()
+			assert(ks == ([0, 1, 2] as Array[int]), "벌레는 늘 종류마다 한 마리씩이다: %s" % [ks])
+			assert(g.eat_steps.size() <= g.worm.length() + 3, "꼬리를 지난 먹은 기록은 버린다: %d" % g.eat_steps.size())
 			var worm := g.worm.cell_set()
 			assert(worm.size() == g.worm.length(), "지렁이가 자기 칸과 겹친다")
 			for b in g.field.bugs:
@@ -279,8 +299,48 @@ func _test_perf_worm() -> void:
 	var cells := Tuning.BOX * Tuning.BOX * Tuning.BOX
 	assert(g.worm.length() == mini(Tuning.PERF_LENGTH, cells - Tuning.BUG_COUNT), "성능 확인용 지렁이 길이")
 	assert(g.field.rocks.is_empty(), "성능 확인용 판에는 바위가 없다")
-	assert(g.field.bugs.size() == Tuning.BUG_COUNT)
+	assert(g.field.bugs.size() == Tuning.BUG_COUNT and g.field.kinds == ([0, 1, 2] as Array[int]))
 	for j in range(1, g.worm.length()):
 		var d := g.worm.cells[j - 1] - g.worm.cells[j]
 		assert(absi(d.x) + absi(d.y) + absi(d.z) == 1, "마디가 끊겼다")
 		assert(g.worm.entries[j - 1] == d, "입구 방향이 실제 이동과 다르다")
+
+# 벌레 종류마다 점수가 다르고, 성장과 속도 상승은 같다.
+func _test_scores_by_kind() -> void:
+	var seen := {}
+	for kind in Tuning.BUG_COUNT:
+		seen[Tuning.BUG_SCORES[kind]] = true
+		var g := _clean()
+		_bugs(g, [[Vector3i(3, 4, 4), kind]])
+		_go(g, -X)
+		_one_step(g)
+		assert(g.score == Tuning.BUG_SCORES[kind], "종류 %d 의 점수: %d" % [kind, g.score])
+		assert(g.worm.length() == 4, "점수와 무관하게 한 마디 자란다: 종류 %d" % kind)
+		assert(is_equal_approx(g.speed, Tuning.SPEED_START + Tuning.SPEED_STEP), "속도 상승도 같다: 종류 %d" % kind)
+		assert(g.field.kinds == ([kind] as Array[int]), "먹은 종류가 다시 생긴다: 종류 %d, %s" % [kind, g.field.kinds])
+	assert(Tuning.BUG_SCORES.size() == Tuning.BUG_COUNT and seen.size() == Tuning.BUG_COUNT, "점수는 종류마다 다르다")
+
+# 먹는 순간 ate 신호가 한 번, 종류·점수·칸과 함께 온다.
+func _test_ate_signal() -> void:
+	var g := _clean()
+	_bugs(g, [[Vector3i(3, 4, 4), 2]])
+	var got := []
+	g.ate.connect(func(kind: int, points: int, cell: Vector3i) -> void: got.append([kind, points, cell]))
+	_go(g, -X)
+	_one_step(g)
+	assert(got == [[2, Tuning.BUG_SCORES[2], Vector3i(3, 4, 4)]], "먹으면 ate 신호가 한 번: %s" % [got])
+	assert(g.eaten_cell == Vector3i(3, 4, 4) and g.eaten_kind == 2, "최근에 먹은 벌레 기록")
+	_one_step(g)
+	assert(got.size() == 1, "먹지 않은 걸음에는 신호가 없다")
+
+# 진행값(넘은 칸 수 + 칸 안 진행률)과 먹은 걸음 기록. 연출이 쓴다.
+func _test_progress_and_eat_marks() -> void:
+	var g := _clean()
+	_bugs(g, [[Vector3i(3, 4, 4), 0]])
+	_go(g, -X)
+	assert(g.progress() == 0.0, "출발 직후 진행값 0")
+	g.advance(0.1)
+	assert(is_equal_approx(g.progress(), g.alpha), "첫 칸 안에서는 진행값 = alpha")
+	_one_step(g)
+	assert(g.steps == 1 and g.eat_steps == ([1] as Array[int]), "먹은 걸음 번호를 기록한다: %s" % [g.eat_steps])
+	assert(g.progress() >= 1.0 and g.progress() < 2.0, "한 칸 넘긴 뒤 진행값: %f" % g.progress())

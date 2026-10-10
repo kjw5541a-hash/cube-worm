@@ -13,6 +13,7 @@ var camera := Camera3D.new()
 var yaw_step := 0                # 목표 시점(0~3). 회전 버튼을 누르는 즉시 바뀐다
 var _yaw_target := YAW_BASE_DEG  # 진행 중인 트윈의 중간값에 90°를 더하면 단계와 어긋나므로 따로 누적한다
 var _tween: Tween = null
+var _shake_left := 0.0           # 죽을 때 화면 흔들림이 남은 시간(초)
 
 func _init() -> void:
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
@@ -26,7 +27,8 @@ func _init() -> void:
 func _ready() -> void:
 	frame_box()
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_shake_left = maxf(0.0, _shake_left - delta)
 	frame_box()
 
 # 화면 비율이 달라도(긴 폰, 가로로 넓은 데스크톱 창) 1px 당 월드 길이를 설계 화면과 같게 두고,
@@ -34,7 +36,17 @@ func _process(_delta: float) -> void:
 func frame_box() -> void:
 	var vp := get_viewport().get_visible_rect().size
 	camera.size = vp.y * UNITS_PER_PX
-	camera.v_offset = -(vp.y * 0.5 - BOX_CENTER_Y_PX) * UNITS_PER_PX
+	# 흔들림은 시간이 갈수록 줄어 SHAKE_TIME 뒤에 정확히 0 이 된다.
+	var off := Vector2(sin(_shake_left * 93.0), cos(_shake_left * 71.0)) * Tuning.SHAKE_AMP * (_shake_left / Tuning.SHAKE_TIME)
+	camera.h_offset = off.x
+	camera.v_offset = -(vp.y * 0.5 - BOX_CENTER_Y_PX) * UNITS_PER_PX + off.y
+
+# 죽을 때 화면을 짧게 흔든다.
+func shake() -> void:
+	_shake_left = Tuning.SHAKE_TIME
+
+func is_shaking() -> bool:
+	return _shake_left > 0.0
 
 # +1 이면 맵이 시계 방향으로 돈다(↗ 에 있던 것이 ↘ 로 간다).
 func turn(dir: int) -> void:

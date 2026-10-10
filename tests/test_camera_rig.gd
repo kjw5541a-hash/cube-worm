@@ -7,6 +7,7 @@ func _initialize() -> void:
 	await _test_turn_is_clockwise_and_accumulates()
 	await _test_box_fits_screen()
 	await _test_same_scale_on_other_screens()
+	await _test_shake_decays_and_returns_home()
 	print("test_camera_rig: OK")
 	quit()
 
@@ -75,3 +76,18 @@ func _test_same_scale_on_other_screens() -> void:
 		widths.append(r.camera.unproject_position(Vector3(B, 0, 0)).x - r.camera.unproject_position(Vector3(0, 0, B)).x)
 		r.get_parent().queue_free()
 	assert(absf(widths[1] - widths[0]) < 1.0 and absf(widths[2] - widths[0]) < 1.0, "화면 비율에 따라 상자 크기가 달라졌다: %s" % [widths])
+
+# 죽을 때 흔들림: 흔들리는 동안 카메라가 어긋나고, SHAKE_TIME 뒤에는 원래 자리로 정확히 돌아온다.
+func _test_shake_decays_and_returns_home() -> void:
+	var r := _rig()
+	await process_frame
+	var home_v := r.camera.v_offset
+	assert(not r.is_shaking() and r.camera.h_offset == 0.0, "평소에는 흔들리지 않는다")
+	r.shake()
+	r.frame_box()
+	var off := Vector2(r.camera.h_offset, r.camera.v_offset - home_v)
+	assert(r.is_shaking() and off.length() > 0.0 and off.length() <= Tuning.SHAKE_AMP * 1.5, "흔들리는 동안 어긋난다: %s" % off)
+	await create_timer(Tuning.SHAKE_TIME + 0.2).timeout
+	assert(not r.is_shaking(), "SHAKE_TIME 뒤에는 멈춘다")
+	assert(r.camera.h_offset == 0.0 and is_equal_approx(r.camera.v_offset, home_v), "원래 자리로 돌아온다")
+	r.get_parent().queue_free()

@@ -5,6 +5,9 @@ extends RefCounted
 
 enum State { WAITING, RUNNING, DEAD }
 
+# 벌레를 먹은 순간(걸음 이벤트 안). 종류, 얻은 점수, 먹은 칸.
+signal ate(kind: int, points: int, cell: Vector3i)
+
 var worm: Worm
 var field: Field
 var state := State.WAITING
@@ -14,6 +17,10 @@ var score := 0
 var queue: Array[int] = []    # 아직 적용 안 된 조향 입력(Worm.Steer). 칸 경계마다 하나씩 꺼내 쓴다
 var paused := false           # 맵 회전 중이면 밖에서 켠다
 var just_grew := false        # 이번 걸음에 꼬리가 자랐는가(새 꼬리가 부풀어 오르는 연출용)
+var steps := 0                # 지금까지 넘은 칸 수(걸음 이벤트 횟수)
+var eat_steps: Array[int] = []  # 벌레를 먹은 걸음 번호. 먹은 덩어리가 몸을 따라 흐르는 연출이 쓴다(꼬리를 지나면 버린다)
+var eaten_cell := Vector3i.ZERO # 가장 최근에 먹은 벌레의 칸
+var eaten_kind := -1            # 가장 최근에 먹은 벌레의 종류
 
 func _init(seed: int = 0, perf := false) -> void:
 	var rng := RandomNumberGenerator.new()
@@ -30,8 +37,8 @@ func _init(seed: int = 0, perf := false) -> void:
 	else:
 		worm = Worm.straight(Tuning.START_HEAD, Tuning.START_DIR, Tuning.START_LENGTH)
 		field.place_rocks(Tuning.ROCK_COUNT, worm.cells, Tuning.ROCK_CLEAR_RADIUS)
-	for i in Tuning.BUG_COUNT:
-		field.spawn_bug(worm.cell_set())
+	for k in Tuning.BUG_COUNT:  # 종류마다 한 마리씩
+		field.spawn_bug(worm.cell_set(), k)
 
 # 조향 입력(Worm.Steer). 지렁이는 늘 앞으로 가고, 이 입력이 머리 방향을 지렁이 기준으로 꺾는다.
 # 받아들였으면 true. 출발 전 첫 입력은 바로 첫 꺾임이 되고, 그 뒤에는 큐에 쌓였다가 칸 경계에서 적용된다.
@@ -70,17 +77,32 @@ func advance(delta: float) -> void:
 func blocked(c: Vector3i) -> bool:
 	return not field.in_bounds(c) or field.has_rock(c) or worm.blocks(c)
 
+# 진행값: 지금까지 넘은 칸 수 + 지금 칸 안의 진행률. 단조 증가한다.
+func progress() -> float:
+	return float(steps) + alpha
+
 # 머리가 출구 면을 넘는 순간. 막힌 칸은 advance 가 먼저 걸러낸다.
 func _step() -> void:
 	var next := worm.head() + worm.head_exit
 	alpha -= 1.0
+	steps += 1
+	while not eat_steps.is_empty() and steps - eat_steps[0] > worm.length() + 2:
+		eat_steps.pop_front()
 	just_grew = field.has_bug(next)
+	var kind := -1
+	var points := 0
 	if just_grew:
+		kind = field.kind_at(next)
+		points = Tuning.BUG_SCORES[kind]
 		field.remove_bug(next)
-		score += 1
+		score += points
 		speed = minf(speed + Tuning.SPEED_STEP, Tuning.SPEED_MAX)
+		eat_steps.append(steps)
+		eaten_cell = next
+		eaten_kind = kind
 	worm.step(just_grew)
 	if just_grew:
-		field.spawn_bug(worm.cell_set())
+		field.spawn_bug(worm.cell_set(), kind)  # 먹은 종류가 빈 칸 하나에 다시 생긴다
+		ate.emit(kind, points, next)
 	# 새 칸의 출구: 큐의 입력을 이 칸으로 들어온 방향(entries[0])과 윗면 기준(refs[0])에서 꺾은 방향, 없으면 직진.
 	worm.head_exit = Worm.turned(queue.pop_front(), worm.entries[0], worm.refs[0]) if not queue.is_empty() else worm.entries[0]

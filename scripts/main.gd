@@ -1,6 +1,6 @@
 extends Node3D
 
-# 게임 화면: 게임 진행, 입력 연결, 죽은 뒤 다시 시작.
+# 게임 화면: 게임 진행, 입력 연결, 지렁이 선택, 죽은 뒤 다시 시작.
 # 타이틀·일시정지·게임오버 화면은 6단계에서 붙인다.
 
 var game: Game
@@ -9,7 +9,9 @@ var field_view := FieldView.new()
 var worm_view := WormView.new()
 var hud := Hud.new()
 var controller := Controller.new()
+var picker := SkinPicker.new()
 var _dead_time := 0.0
+var _was_dead := false
 
 func _ready() -> void:
 	var env := Environment.new()
@@ -31,16 +33,22 @@ func _ready() -> void:
 	add_child(worm_view)
 	add_child(hud)
 	hud.add_child(controller)
+	hud.add_child(picker)
 	controller.steer_pressed.connect(_on_steer)
 	controller.turn_pressed.connect(_on_turn)
 	hud.turn_pressed.connect(_on_turn)
+	picker.skin_changed.connect(_on_skin_changed)
+	picker.set_index(Skins.worm_index(SaveData.load_skin()))
+	worm_view.apply_skin(picker.index)
 	new_game()
 
 func new_game() -> void:
 	game = Game.new(randi(), perf_requested())
+	game.ate.connect(_on_ate)
 	field_view.setup(game)
 	worm_view.setup(game)
 	_dead_time = 0.0
+	_was_dead = false
 	hud.show_restart(false)
 
 # 웹은 주소 끝 ?perf, 데스크톱은 실행 인자 --perf 면 500마디로 시작한다(성능 확인용).
@@ -55,9 +63,22 @@ func _process(delta: float) -> void:
 	game.paused = rig.is_turning()
 	game.advance(delta)
 	hud.set_score(game.score)
+	picker.visible = game.state == Game.State.WAITING  # 시작 전에만 지렁이를 고른다
 	if game.state == Game.State.DEAD:
+		if not _was_dead:
+			_was_dead = true
+			rig.shake()
 		_dead_time += delta
 		hud.show_restart(_dead_time >= Tuning.DEATH_DELAY)
+
+func _on_skin_changed(index: int) -> void:
+	worm_view.apply_skin(index)
+	SaveData.save_skin(Skins.WORMS[index]["id"])
+
+# 벌레를 먹으면 먹은 칸 위에 점수가 떠오른다. 색은 벌레 종류 색이다.
+func _on_ate(kind: int, points: int, cell: Vector3i) -> void:
+	var at := rig.camera.unproject_position(WormPath.center(cell)) - Vector2(0, 40)
+	hud.pop("+%d" % points, at, Skins.BUGS[kind]["color"])
 
 func _on_steer(steer: int) -> void:
 	if game.state == Game.State.DEAD:

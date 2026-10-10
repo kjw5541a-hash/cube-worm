@@ -38,6 +38,22 @@ func set_score(v: int) -> void:
 func show_restart(on: bool) -> void:
 	restart_label.visible = on
 
+# 벌레를 먹은 점수 "+N" 을 화면 위치 at(뷰포트 좌표)에서 위로 떠올렸다가 사라지게 한다.
+func pop(text: String, at: Vector2, color := Color(1.0, 0.9, 0.45)) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", 52)
+	l.add_theme_color_override("font_color", color)
+	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+	l.add_theme_constant_override("outline_size", 8)
+	add_child(l)
+	l.position = at - l.get_minimum_size() * 0.5
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(l, "position:y", l.position.y - 90.0, Tuning.POP_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(l, "modulate:a", 0.0, Tuning.POP_TIME * 0.45).set_delay(Tuning.POP_TIME * 0.55)
+	tw.chain().tween_callback(l.queue_free)
+	return l
+
 func _process(_delta: float) -> void:
 	info_label.text = "%s  %d fps" % [_version, Engine.get_frames_per_second()]
 

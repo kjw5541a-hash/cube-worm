@@ -32,3 +32,12 @@ renderer/rendering_method.mobile="gl_compatibility"
 
 ; 웹에는 시스템 폰트가 없고 Godot 내장 폰트에는 한글이 없다. 지정하지 않으면 폰에서 한글이 네모로 나온다.
 theme/custom_font="res://assets/fonts/NotoSansKR-hangul.ttf"
+
+[importer_defaults]
+
+; 에셋은 삼각형 수백 개짜리 작은 메시라 LOD·그림자 메시가 필요 없다. 직교 카메라에서 LOD 가 거친 단계로 바뀌어
+; 모양이 변하는 것도 막는다.
+scene={
+"meshes/create_shadow_meshes": false,
+"meshes/generate_lods": false
+}

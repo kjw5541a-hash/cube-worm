@@ -13,7 +13,8 @@ const SPEED_STEP := 0.1                     # 벌레 한 마리마다
 const SPEED_MAX := 6.0
 const MAX_STEP_PER_FRAME := 1.0 / 3.0       # 한 프레임에 머리가 나아가는 최대 칸
 
-const BUG_COUNT := 3
+const BUG_COUNT := 3                        # 벌레 종류 수. 종류마다 한 마리씩 항상 있다(= BUG_SCORES.size())
+const BUG_SCORES: Array[int] = [1, 2, 3]    # 종류별 점수: 크림·더듬이·반딧불. 성장과 속도 상승은 종류와 무관하다
 const ROCK_COUNT := 8
 const ROCK_CLEAR_RADIUS := 2                # 시작 지렁이 칸에서 이 체비쇼프 거리 안에는 바위 없음
 const QUEUE_MAX := 2
@@ -33,3 +34,13 @@ const GLANCE_DEG := 15.0                    # 예고 동작: 다음 방향으로
 const WOBBLE_AMP := 0.05                    # 꿈틀거림: 굵기 진폭
 const WOBBLE_HZ := 1.6                      # 꿈틀거림: 초당 파동 수
 const WOBBLE_WAVELENGTH := 6.0              # 꿈틀거림: 파동 한 주기의 마디 수
+
+# 연출(5단계)
+const BULGE_PEAK := 0.25                    # 먹은 덩어리가 몸을 따라 흐를 때 마디가 부푸는 비율(꼭대기)
+const BULGE_WIDTH := 1.3                    # 덩어리의 폭(마디 수)
+const EAT_PULL := 0.5                       # 먹힌 벌레가 머리로 빨려 드는 데 걸리는, 걸음의 앞쪽 비율
+const DEATH_SQUASH := 0.78                  # 죽을 때 머리가 앞뒤로 찌그러지는 비율(앞면은 장애물에 붙은 채)
+const DEATH_SQUASH_TIME := 0.14             # 찌그러지는 데 걸리는 시간(초)
+const SHAKE_TIME := 0.24                    # 죽을 때 화면 흔들림 시간(초)
+const SHAKE_AMP := 0.18                     # 화면 흔들림 세기(월드 길이)
+const POP_TIME := 0.9                       # 점수 +N 이 떠올라 사라지는 시간(초)

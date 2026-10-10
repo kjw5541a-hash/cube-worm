@@ -5,6 +5,7 @@ extends RefCounted
 var size: int
 var rocks := {}                     # Vector3i -> true
 var bugs: Array[Vector3i] = []
+var kinds: Array[int] = []          # bugs 와 같은 순서의 벌레 종류(0 ~ BUG_COUNT-1). 둘은 늘 같이 간다
 var rng: RandomNumberGenerator
 
 func _init(box_size: int, random: RandomNumberGenerator) -> void:
@@ -50,13 +51,22 @@ static func _near(c: Vector3i, cells: Array[Vector3i], radius: int) -> bool:
 			return true
 	return false
 
-# 빈 칸 하나에 벌레를 둔다. 빈 칸이 없으면 false.
-func spawn_bug(blocked: Dictionary) -> bool:
+# 빈 칸 하나에 kind 종류 벌레를 둔다. 빈 칸이 없으면 false.
+func spawn_bug(blocked: Dictionary, kind: int) -> bool:
 	var free := empty_cells(blocked)
 	if free.is_empty():
 		return false
 	bugs.append(free[rng.randi_range(0, free.size() - 1)])
+	kinds.append(kind)
 	return true
 
+# 칸 c 에 있는 벌레의 종류. 없으면 -1.
+func kind_at(c: Vector3i) -> int:
+	var i := bugs.find(c)
+	return kinds[i] if i >= 0 else -1
+
 func remove_bug(c: Vector3i) -> void:
-	bugs.erase(c)
+	var i := bugs.find(c)
+	if i >= 0:
+		bugs.remove_at(i)
+		kinds.remove_at(i)

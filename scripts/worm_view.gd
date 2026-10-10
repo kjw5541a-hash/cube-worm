@@ -1,24 +1,27 @@
 class_name WormView
 extends Node3D
 
-# 지렁이 그리기: 머리 메시 + 몸 MultiMesh. 매 프레임 게임 상태로 마디 변환을 다시 계산한다.
-# 3단계는 임시 도형(상자)이다. 5단계에서 Blender 에셋으로 바꾼다.
+# 지렁이 그리기: 머리 메시 + 몸 MultiMesh. 모양은 스킨(GLB)이 정하고, 매 프레임 게임 상태로 마디 변환을 다시 계산한다.
 
 const SHADER := preload("res://shaders/worm.gdshader")
 const XRAY := preload("res://shaders/xray.gdshader")
+const BAND_INDEX := 3  # 머리 = 0 부터 센 마디 번호. 이 마디가 밝은 띠(지렁이 환대)다
 
 var game: Game
 var head := MeshInstance3D.new()
 var body := MultiMeshInstance3D.new()
+var skin_index := -1
 var _time := 0.0
 var _glance := 0.0
 var _glance_dir := Vector3.ZERO
+var _dead_time := 0.0
 
-# 공용 셰이더 재질. xray 면 가려진 부분이 비쳐 보이는 두 번째 패스를 붙인다.
-static func material(color: Color, emission := 0.0, xray := false) -> ShaderMaterial:
+# 공용 셰이더 재질. xray 면 가려진 부분이 비쳐 보이는 두 번째 패스를 붙인다. band 는 밝은 띠 마디의 색.
+static func material(color: Color, emission := 0.0, xray := false, band := Color.WHITE) -> ShaderMaterial:
 	var m := ShaderMaterial.new()
 	m.shader = SHADER
 	m.set_shader_parameter("albedo", color)
+	m.set_shader_parameter("band_color", band)
 	m.set_shader_parameter("emission", emission)
 	m.set_shader_parameter("box_height", float(Tuning.BOX))
 	m.set_shader_parameter("min_bright", Tuning.DEPTH_MIN_BRIGHT)
@@ -39,42 +42,30 @@ static func tail_scale(k: float) -> float:
 	var i := int(floor(k)) + 1
 	return lerpf(pts[i], pts[i + 1], k - floor(k))
 
-func _init() -> void:
-	var hm := BoxMesh.new()
-	hm.size = Vector3.ONE * Tuning.HEAD_SIZE
-	head.mesh = hm
-	head.material_override = material(Color(0.92, 0.42, 0.48), 0.0, true)
-	# 눈: 진행 방향이 읽히게. 얇게 둬서 비침 패스의 당김(0.05)보다 덜 튀어나오게 한다.
-	for side in [-1.0, 1.0]:
-		var eye := MeshInstance3D.new()
-		var em := BoxMesh.new()
-		em.size = Vector3(0.2, 0.2, 0.04)
-		eye.mesh = em
-		eye.position = Vector3(0.22 * side, 0.16, -Tuning.HEAD_SIZE * 0.5)
-		eye.material_override = material(Color(1, 1, 1))
-		head.add_child(eye)
-	add_child(head)
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	var bm := BoxMesh.new()
-	bm.size = Vector3.ONE * Tuning.SEGMENT_SIZE
-	mm.mesh = bm
-	mm.instance_count = Tuning.BOX * Tuning.BOX * Tuning.BOX
-	mm.visible_instance_count = 0
-	body.multimesh = mm
-	body.material_override = material(Color(0.95, 0.6, 0.62))
-	add_child(body)
+# MultiMesh 인스턴스 i 의 색. 알파 0 이 밝은 띠 마디다(마디 j 는 인스턴스 j-1).
+static func instance_color(i: int) -> Color:
+	return Color(1, 1, 1, 0.0 if i == BAND_INDEX - 1 else 1.0)
 
-func setup(g: Game) -> void:
-	game = g
-	_glance = 0.0
-	_update(0.0)
+# 먹은 덩어리가 마디 j 를 부풀리는 배율. pos 는 덩어리의 위치(머리에서 마디 수로 센 거리)다.
+static func bulge_scale(j: float, pos: float) -> float:
+	var d := absf(j - pos) / Tuning.BULGE_WIDTH
+	if d >= 1.0:
+		return 1.0
+	return 1.0 + Tuning.BULGE_PEAK * 0.5 * (1.0 + cos(PI * d))
 
-func _process(delta: float) -> void:
-	_time += delta
-	_update(delta)
+# 죽은 뒤 time 초가 지났을 때 머리의 앞뒤 길이 비율(1 → DEATH_SQUASH). 앞면은 장애물에 붙은 채 줄어든다.
+static func death_squash(time: float) -> float:
+	var t := clampf(time / Tuning.DEATH_SQUASH_TIME, 0.0, 1.0)
+	return lerpf(1.0, Tuning.DEATH_SQUASH, 1.0 - (1.0 - t) * (1.0 - t))
 
-# 몸 마디 j(1 이상)를 그릴 변환. 위치·자세는 경로를 그대로 따르고, 크기는 꼬리 배율 × 꿈틀거림이다.
+# 먹은 덩어리들이 마디 j 에 주는 배율의 최댓값. 덩어리는 먹은 걸음에서 진행값 차이만큼 몸을 따라 흘러갔다.
+static func _bump(g: Game, j: float) -> float:
+	var out := 1.0
+	for e in g.eat_steps:
+		out = maxf(out, bulge_scale(j, g.progress() - float(e)))
+	return out
+
+# 몸 마디 j(1 이상)를 그릴 변환. 위치·자세는 경로를 그대로 따르고, 크기는 꼬리 배율 × 꿈틀거림 × 먹은 덩어리다.
 static func body_transform(g: Game, j: int, time: float) -> Transform3D:
 	var t := WormPath.segment(g.worm, j, g.alpha)
 	# 자라는 걸음 동안에는 꼬리 쪽 번호가 한 칸씩 밀리는 것을 진행률로 이어 준다. 새 꼬리는 크기 0 에서 시작한다.
@@ -82,8 +73,45 @@ static func body_transform(g: Game, j: int, time: float) -> Transform3D:
 	var s := tail_scale(float(g.worm.length() - 1 - j) - grow)
 	# 꿈틀거림: 머리에서 꼬리로 흐르는 굵기 파동. 길이 방향(Z)은 두고 단면만 바꾼다.
 	var wave := 1.0 + Tuning.WOBBLE_AMP * sin(TAU * (Tuning.WOBBLE_HZ * time - j / Tuning.WOBBLE_WAVELENGTH))
-	t.basis = t.basis * Basis.from_scale(Vector3(s * wave, s * wave, s))
+	var thick := s * wave * _bump(g, float(j))
+	t.basis = t.basis * Basis.from_scale(Vector3(thick, thick, s))
 	return t
+
+func _init() -> void:
+	add_child(head)
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.instance_count = Tuning.BOX * Tuning.BOX * Tuning.BOX
+	mm.visible_instance_count = 0
+	for i in mm.instance_count:
+		mm.set_instance_color(i, instance_color(i))
+	body.multimesh = mm
+	add_child(body)
+	apply_skin(0)
+
+# 지렁이 스킨(Skins.WORMS 번호)을 적용한다. 머리와 마디 메시를 바꾸고 공용 셰이더 재질을 씌운다.
+func apply_skin(index: int) -> void:
+	skin_index = index
+	var skin: Dictionary = Skins.WORMS[index]
+	var seg := Models.load_model(skin["segment"])
+	var c: Color = seg["colors"][0]
+	body.multimesh.mesh = seg["mesh"]
+	body.material_override = material(c, 0.0, false, c.lerp(Color.WHITE, 0.5))
+	var hd := Models.load_model(skin["head"])
+	head.mesh = hd["mesh"]
+	for i in hd["colors"].size():
+		head.set_surface_override_material(i, material(hd["colors"][i], 0.0, true))
+
+func setup(g: Game) -> void:
+	game = g
+	_glance = 0.0
+	_dead_time = 0.0
+	_update(0.0)
+
+func _process(delta: float) -> void:
+	_time += delta
+	_update(delta)
 
 func _update(delta: float) -> void:
 	if game == null:
@@ -95,7 +123,7 @@ func _update(delta: float) -> void:
 		mm.set_instance_transform(j - 1, body_transform(game, j, _time))
 	head.transform = _head_transform(delta)
 
-# 예고 동작: 큐의 다음 방향으로 고개를 살짝 미리 돌린다. 실제로 꺾이기 시작하면 경로 자세로 합쳐진다.
+# 머리 변환. 다음 방향으로 미리 고개를 돌리는 예고 동작, 먹은 덩어리가 머리를 지날 때의 꿀꺽, 죽을 때의 찌그러짐을 얹는다.
 func _head_transform(delta: float) -> Transform3D:
 	var t := WormPath.segment(game.worm, 0, game.alpha)
 	var want := 0.0
@@ -106,4 +134,14 @@ func _head_transform(delta: float) -> Transform3D:
 	var axis := (-t.basis.z).cross(_glance_dir)
 	if _glance > 0.0 and axis.length() > 0.01:
 		t.basis = Basis(axis.normalized(), deg_to_rad(Tuning.GLANCE_DEG) * _glance) * t.basis
+	if game.state == Game.State.DEAD:
+		_dead_time += delta
+	else:
+		_dead_time = 0.0
+	var swallow := 1.0 + (_bump(game, 0.0) - 1.0) * 0.5
+	var sq := death_squash(_dead_time)
+	var wide := swallow * (1.0 + (1.0 - sq) * 0.4)
+	var fwd := -t.basis.z
+	t.basis = t.basis * Basis.from_scale(Vector3(wide, wide, swallow * sq))
+	t.origin += fwd * (1.0 - sq) * Tuning.HEAD_SIZE * 0.5  # 앞면은 제자리에 둔다
 	return t
