@@ -30,9 +30,10 @@ func _test_layer_plane_follows_head() -> void:
 		g.advance(1.0 / 60.0)
 		fv._update()
 		var layer := g.worm.head().y
-		assert(fv.plane.position.y == float(layer) and fv.plane_top.position.y == float(layer + 1), "머리 칸이 있는 층의 아래·위 경계에 판이 놓인다")
+		assert(absf(fv.plane.position.y - layer) < 0.05 and absf(fv.plane_top.position.y - (layer + 1)) < 0.05, "머리 칸이 있는 층의 아래·위 경계에 판이 놓인다")
+		assert(fv.plane.position.y > layer and fv.plane_top.position.y < layer + 1, "판은 경계 안쪽으로 들어가 상자 바닥·천장과 겹치지 않는다")
 		var head_y := WormPath.segment(g.worm, 0, g.alpha).origin.y
-		assert(head_y >= fv.plane.position.y - 1e-4 and head_y <= fv.plane_top.position.y + 1e-4, "머리는 두 판 사이에 있다(판이 관통하지 않는다)")
+		assert(head_y >= fv.plane.position.y - FieldView.PLANE_INSET - 1e-4 and head_y <= fv.plane_top.position.y + FieldView.PLANE_INSET + 1e-4, "머리는 두 판 사이에 있다(판이 관통하지 않는다)")
 	fv.queue_free()
 
 # 벌레는 종류마다 자기 메시와 색의 고리·기둥을 가진다.

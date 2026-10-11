@@ -4,6 +4,7 @@ extends Node3D
 # 흙 상자, 바위, 벌레(종류 3가지), 머리 층의 아래·위 판, 벌레 고리·기둥, 머리로 빨려 드는 벌레.
 
 const ROCK_MODEL := "res://assets/models/rock.glb"
+const PLANE_INSET := 0.02
 const MAX_PER_KIND := 3  # 한 종류 벌레가 한 판에 가장 많이 나오는 수(레벨 7~8)
 
 var game: Game
@@ -115,8 +116,9 @@ func _update() -> void:
 	var half := Tuning.BOX * 0.5
 	# 판은 머리를 관통하지 않고, 머리 칸이 있는 층의 아래·위 경계에 놓인다. 한 층이 통째로 칸으로 보인다.
 	var layer := game.worm.head().y
-	plane.position = Vector3(half, layer, half)
-	plane_top.position = Vector3(half, layer + 1, half)
+	# 층 안쪽으로 살짝 들인다: 맨 아래·위 층에서 상자 바닥·천장과 깊이가 겹쳐 깨지는 것을 막는다.
+	plane.position = Vector3(half, layer + PLANE_INSET, half)
+	plane_top.position = Vector3(half, layer + 1 - PLANE_INSET, half)
 	for k in Tuning.BUG_COUNT:
 		var cells: Array[Vector3i] = []
 		for i in game.field.bugs.size():
