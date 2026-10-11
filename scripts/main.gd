@@ -68,7 +68,7 @@ static func start_level_requested() -> int:
 		var q := str(JavaScriptBridge.eval("window.location.search", true))
 		var i := q.find("level=")
 		if i >= 0:
-			return clampi(int(q.substr(i + 6)), 1, Tuning.LEVEL_MAX)
+			return clampi(int(q.substr(i + 6).split("&")[0]), 1, Tuning.LEVEL_MAX)  # to_int 는 숫자가 아닌 글자를 건너뛰고 이어 붙이므로 & 앞에서 자른다
 	return 1
 
 # 웹은 주소 끝 ?perf, 데스크톱은 실행 인자 --perf 면 500마디로 시작한다(성능 확인용).

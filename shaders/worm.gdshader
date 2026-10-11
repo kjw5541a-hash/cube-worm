@@ -1,5 +1,6 @@
 shader_type spatial;
-render_mode specular_disabled;
+// 뒷면도 그린다: 다른 층 물체는 속이 비어 있어 뒤쪽 모서리까지 보여야 정육면체 윤곽이 된다(같은 층은 깊이 검사로 가려진다).
+render_mode specular_disabled, cull_disabled;
 
 // 지렁이·벌레·바위가 같이 쓴다. 깊을수록 어둡게 칠해(높이 색) 화면에서 겹친 물체의 높이를 가른다.
 uniform vec3 albedo : source_color = vec3(1.0);
