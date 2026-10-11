@@ -4,6 +4,7 @@ func _initialize() -> void:
 	_test_layer_plane_follows_head()
 	_test_bug_markers_per_kind()
 	_test_box_follows_height_and_extra_bugs()
+	_test_cell_marker_follows_head_cell()
 	_test_rocks_use_the_model()
 	_test_rock_basis_is_axis_aligned_and_stable()
 	_test_ghost_is_pulled_into_the_head()
@@ -66,6 +67,17 @@ func _test_box_follows_height_and_extra_bugs() -> void:
 	g2.field.kinds.assign([1, 1, 1])
 	fv._update()
 	assert(fv.bugs[3].visible and fv.bugs[4].visible and fv.bugs[5].visible and not fv.bugs[0].visible, "같은 종류 3마리를 모두 그린다")
+	fv.queue_free()
+
+# 머리가 있는 칸에 블록이 놓이고, 한 걸음 가면 다음 칸으로 옮겨 간다.
+func _test_cell_marker_follows_head_cell() -> void:
+	var g := Game.new(4, false, 3)
+	var fv := _view(g)
+	assert(fv.cell_marker.position.is_equal_approx(WormPath.center(g.worm.head())), "블록이 머리 칸 중심에 있다")
+	g.worm.head_exit = Vector3i(-1, 0, 0)
+	g.worm.step(false)
+	fv._update()
+	assert(fv.cell_marker.position.is_equal_approx(WormPath.center(g.worm.head())), "한 걸음 뒤 블록도 따라간다")
 	fv.queue_free()
 
 func _test_rocks_use_the_model() -> void:

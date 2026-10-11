@@ -1,7 +1,7 @@
 class_name FieldView
 extends Node3D
 
-# 흙 상자, 바위, 벌레(종류 3가지), 머리 층 판, 벌레 고리·기둥, 머리로 빨려 드는 벌레.
+# 흙 상자, 바위, 벌레(종류 3가지), 머리 층 판, 머리 칸 블록, 벌레 고리·기둥, 머리로 빨려 드는 벌레.
 
 const ROCK_MODEL := "res://assets/models/rock.glb"
 const MAX_PER_KIND := 3  # 한 종류 벌레가 한 판에 가장 많이 나오는 수(레벨 7~8)
@@ -10,6 +10,7 @@ var game: Game
 var box := MeshInstance3D.new()
 var rocks := MultiMeshInstance3D.new()
 var plane := MeshInstance3D.new()
+var cell_marker := MeshInstance3D.new()  # 머리가 있는 칸을 표시하는 블록
 var bugs: Array[MeshInstance3D] = []    # 종류 k 의 j 번째 벌레 = k * MAX_PER_KIND + j
 var rings: Array[MeshInstance3D] = []
 var stems: Array[MeshInstance3D] = []
@@ -49,6 +50,15 @@ func _init() -> void:
 	pmat.shader = preload("res://shaders/layer_plane.gdshader")
 	plane.material_override = pmat
 	add_child(plane)
+
+	var cm := BoxMesh.new()
+	cm.size = Vector3.ONE * 1.02
+	cell_marker.mesh = cm
+	var cmat := ShaderMaterial.new()
+	cmat.shader = preload("res://shaders/cell_marker.gdshader")
+	cell_marker.material_override = cmat
+	cell_marker.sorting_offset = 100.0  # 판·벌레보다 나중에 그린다
+	add_child(cell_marker)
 
 	var ring_mesh := TorusMesh.new()
 	ring_mesh.inner_radius = 0.3
@@ -110,6 +120,7 @@ func _update() -> void:
 	var head_y := WormPath.segment(game.worm, 0, game.alpha).origin.y
 	var half := Tuning.BOX * 0.5
 	plane.position = Vector3(half, head_y, half)
+	cell_marker.position = WormPath.center(game.worm.head())
 	for k in Tuning.BUG_COUNT:
 		var cells: Array[Vector3i] = []
 		for i in game.field.bugs.size():
