@@ -6,6 +6,8 @@ func _initialize() -> void:
 	_test_new_tail_grows_from_zero()
 	_test_head_glances_toward_queued_turn()
 	_test_skin_applies_models()
+	_test_links_fill_the_gaps()
+	_test_segments_touch()
 	_test_band_marks_one_segment()
 	_test_bulge_scale()
 	_test_bulge_follows_the_eat()
@@ -54,9 +56,9 @@ func _test_new_tail_grows_from_zero() -> void:
 	g.worm.head_exit = Vector3i(-1, 0, 0)
 	while g.worm.length() == 3:
 		g.advance(1.0 / 60.0)
-	var last := WormView.body_transform(g, g.worm.length() - 1, 0.0).basis.get_scale().z
+	var last := WormView.body_transform(g, g.worm.length() - 1, 0.0).basis.get_scale().z / WormView.SEGMENT_STRETCH
 	assert(last <= Tuning.TAIL_TAPER[0] * g.alpha + 0.01, "새 꼬리는 크기 0 에서 부풀어야 한다: %f (alpha %f)" % [last, g.alpha])
-	var before := WormView.body_transform(g, g.worm.length() - 2, 0.0).basis.get_scale().z
+	var before := WormView.body_transform(g, g.worm.length() - 2, 0.0).basis.get_scale().z / WormView.SEGMENT_STRETCH
 	assert(absf(before - Tuning.TAIL_TAPER[0]) < 0.12, "원래 꼬리는 자라는 걸음 처음에 원래 크기를 유지한다: %f" % before)
 
 # 다음 칸에서 꺾을 입력이 큐에 있으면 머리가 그쪽으로 고개를 살짝 돌린다(예고 동작).
@@ -97,6 +99,30 @@ func _test_skin_applies_models() -> void:
 		seen[wv.head.mesh] = true
 	assert(seen.size() == Skins.WORMS.size(), "스킨마다 머리 모양이 다르다")
 	wv.queue_free()
+
+# 연결부는 이웃한 두 마디의 한가운데에 있고, 마디가 하나 줄 때마다 하나씩 준다.
+func _test_links_fill_the_gaps() -> void:
+	var g := _game_moving_up()
+	var wv := WormView.new()
+	root.add_child(wv)
+	wv.setup(g)
+	assert(wv.links.multimesh.visible_instance_count == g.worm.length() - 1, "연결부 수 = 길이 - 1")
+	for j in g.worm.length() - 1:
+		var a := WormPath.segment(g.worm, 0, g.alpha).origin if j == 0 else WormView.body_transform(g, j, 0.0).origin
+		var b := WormView.body_transform(g, j + 1, 0.0).origin
+		var mid := WormView.link_transform(g, j, 0.0).origin
+		assert(mid.distance_to((a + b) * 0.5) < 1e-4, "연결부 %d 는 두 마디의 가운데다" % j)
+		assert(a.distance_to(b) < Tuning.SEGMENT_SIZE + 0.2 + 1.0, "마디 사이가 한 칸 안쪽이다")
+	assert(wv.links.multimesh.mesh == wv.body.multimesh.mesh, "연결부는 마디와 같은 메시다")
+	wv.queue_free()
+
+# 마디는 길이 방향으로 늘어나 이웃 마디와 맞닿는다(한 칸 간격보다 길다).
+func _test_segments_touch() -> void:
+	var g := _game_moving_up()
+	var len_z := Tuning.SEGMENT_SIZE * WormView.SEGMENT_STRETCH
+	assert(len_z >= 1.0, "마디 길이 %f 가 칸 간격 1.0 이상이어야 이웃과 맞닿는다" % len_z)
+	var mid := WormView.body_transform(g, 2, 0.0)
+	assert(is_equal_approx(mid.basis.get_scale().z, WormView.tail_scale(float(g.worm.length() - 3)) * WormView.SEGMENT_STRETCH), "마디 길이 배율이 적용된다")
 
 func _test_band_marks_one_segment() -> void:
 	var bands := []

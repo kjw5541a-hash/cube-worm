@@ -56,7 +56,11 @@ func _init() -> void:
 	plane.material_override = pmat
 	add_child(plane)
 	plane_top.mesh = pm
-	plane_top.material_override = pmat
+	var tmat := ShaderMaterial.new()  # 천장 판은 카메라와 지렁이 사이에 있으니 면 색 없이 격자선만 옅게
+	tmat.shader = pmat.shader
+	tmat.set_shader_parameter("tint", Color(0.95, 0.85, 0.6, 0.0))
+	tmat.set_shader_parameter("line", Color(1.0, 0.95, 0.75, 0.3))
+	plane_top.material_override = tmat
 	add_child(plane_top)
 
 	var ring_mesh := TorusMesh.new()
