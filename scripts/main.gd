@@ -42,6 +42,7 @@ func _ready() -> void:
 	picker.skin_changed.connect(_on_skin_changed)
 	picker.set_index(Skins.worm_index(SaveData.load_skin()))
 	worm_view.apply_skin(picker.index)
+	level = start_level_requested()
 	new_game()
 
 func new_game() -> void:
@@ -57,6 +58,18 @@ func new_game() -> void:
 	_dead_time = 0.0
 	_was_dead = false
 	hud.show_restart(false)
+
+# 주소 끝 ?level=N(웹) 또는 실행 인자 --level=N(데스크톱)이면 그 레벨에서 시작한다(확인용). 없으면 1.
+static func start_level_requested() -> int:
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--level="):
+			return clampi(int(a.substr(8)), 1, Tuning.LEVEL_MAX)
+	if OS.has_feature("web"):
+		var q := str(JavaScriptBridge.eval("window.location.search", true))
+		var i := q.find("level=")
+		if i >= 0:
+			return clampi(int(q.substr(i + 6)), 1, Tuning.LEVEL_MAX)
+	return 1
 
 # 웹은 주소 끝 ?perf, 데스크톱은 실행 인자 --perf 면 500마디로 시작한다(성능 확인용).
 static func perf_requested() -> bool:
