@@ -32,6 +32,7 @@ func _test_layer_plane_follows_head() -> void:
 		var layer := g.worm.head().y
 		assert(absf(fv.plane.position.y - layer) < 0.05 and absf(fv.plane_top.position.y - (layer + 1)) < 0.05, "머리 칸이 있는 층의 아래·위 경계에 판이 놓인다")
 		assert(fv.plane.position.y > layer and fv.plane_top.position.y < layer + 1, "판은 경계 안쪽으로 들어가 상자 바닥·천장과 겹치지 않는다")
+		assert(fv.focus_layer == layer, "셰이더에 넘기는 층이 머리 층이다")
 		var head_y := WormPath.segment(g.worm, 0, g.alpha).origin.y
 		assert(head_y >= fv.plane.position.y - FieldView.PLANE_INSET - 1e-4 and head_y <= fv.plane_top.position.y + FieldView.PLANE_INSET + 1e-4, "머리는 두 판 사이에 있다(판이 관통하지 않는다)")
 	fv.queue_free()

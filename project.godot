@@ -28,6 +28,13 @@ pointing/emulate_touch_from_mouse=true
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 
+[shader_globals]
+
+focus_layer={
+"type": "float",
+"value": 0.0
+}
+
 [gui]
 
 ; 웹에는 시스템 폰트가 없고 Godot 내장 폰트에는 한글이 없다. 지정하지 않으면 폰에서 한글이 네모로 나온다.

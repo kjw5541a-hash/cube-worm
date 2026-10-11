@@ -16,6 +16,7 @@ var bugs: Array[MeshInstance3D] = []    # 종류 k 의 j 번째 벌레 = k * MAX
 var rings: Array[MeshInstance3D] = []
 var stems: Array[MeshInstance3D] = []
 var ghosts: Array[MeshInstance3D] = []  # 먹히는 중인 벌레(종류마다 하나)
+var focus_layer := 0  # 지금 머리가 있는 층(셰이더 전역 값과 같다)
 var _time := 0.0
 var _box_mesh: BoxMesh
 var _soil: ShaderMaterial
@@ -116,6 +117,8 @@ func _update() -> void:
 	var half := Tuning.BOX * 0.5
 	# 판은 머리를 관통하지 않고, 머리 칸이 있는 층의 아래·위 경계에 놓인다. 한 층이 통째로 칸으로 보인다.
 	var layer := game.worm.head().y
+	focus_layer = layer
+	RenderingServer.global_shader_parameter_set("focus_layer", float(layer))
 	# 층 안쪽으로 살짝 들인다: 맨 아래·위 층에서 상자 바닥·천장과 깊이가 겹쳐 깨지는 것을 막는다.
 	plane.position = Vector3(half, layer + PLANE_INSET, half)
 	plane_top.position = Vector3(half, layer + 1 - PLANE_INSET, half)
