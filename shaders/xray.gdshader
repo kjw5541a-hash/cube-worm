@@ -6,12 +6,15 @@ render_mode unshaded, depth_test_inverted, depth_draw_never, cull_back, blend_mi
 uniform vec4 color : source_color = vec4(1.0, 0.95, 0.7, 0.55);
 uniform float pull = 0.05;
 uniform bool ignore_focus = false;
+uniform bool skip_back = false;  // 머리: 뒷면(목 쪽)은 몸 마디에 가려지는 게 당연하니 비침을 그리지 않는다
 #include "res://shaders/focus.gdshaderinc"
 
 varying float v_origin_y;
+varying vec3 v_local_normal;
 
 void vertex() {
 	v_origin_y = MODEL_MATRIX[3].y;
+	v_local_normal = NORMAL;
 	vec4 v = MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
 	v.z += pull;
 	POSITION = PROJECTION_MATRIX * v;
@@ -19,6 +22,9 @@ void vertex() {
 
 void fragment() {
 	if (!ignore_focus && !in_focus(v_origin_y)) {
+		discard;
+	}
+	if (skip_back && v_local_normal.z > 0.5) {
 		discard;
 	}
 	ALBEDO = color.rgb;

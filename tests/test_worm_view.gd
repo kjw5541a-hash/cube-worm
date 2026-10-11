@@ -125,6 +125,8 @@ func _test_worm_ignores_layer_focus() -> void:
 		assert(m.get_shader_parameter("ignore_focus") == true, "지렁이 재질은 층 구분을 건너뛴다")
 		var p := m.next_pass as ShaderMaterial
 		assert(p == null or p.shader != WormView.GHOST, "지렁이에는 유령 패스가 없다")
+	var hx := wv.head.get_surface_override_material(0).next_pass as ShaderMaterial
+	assert(hx.shader == WormView.XRAY and hx.get_shader_parameter("skip_back") == true, "머리 비침은 뒷면(목)을 그리지 않아 첫 마디와 맞닿은 면이 노랗게 비치지 않는다")
 	wv.queue_free()
 
 # 마디는 길이 방향으로 늘어나 이웃 마디와 맞닿는다(한 칸 간격보다 길다).

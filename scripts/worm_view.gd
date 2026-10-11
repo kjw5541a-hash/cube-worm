@@ -43,6 +43,7 @@ static func material(color: Color, emission := 0.0, xray := false, band := Color
 		var x := ShaderMaterial.new()
 		x.shader = XRAY
 		x.set_shader_parameter("ignore_focus", own)
+		x.set_shader_parameter("skip_back", own)
 		tail.next_pass = x
 	return m
 
