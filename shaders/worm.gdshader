@@ -7,6 +7,7 @@ uniform vec3 band_color : source_color = vec3(1.0);
 uniform float emission = 0.0;
 uniform float box_height = 8.0;
 uniform float min_bright = 0.6;
+uniform bool ignore_focus = false;  // 지렁이 자신: 층과 상관없이 늘 또렷하게
 #include "res://shaders/focus.gdshaderinc"
 
 varying float v_band;
@@ -20,7 +21,7 @@ void vertex() {
 }
 
 void fragment() {
-	if (!in_focus(v_origin_y)) {
+	if (!ignore_focus && !in_focus(v_origin_y)) {
 		discard;  // 다른 층은 ghost 패스가 흐리게 그린다
 	}
 	float y = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).y;

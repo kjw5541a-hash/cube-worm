@@ -7,6 +7,7 @@ func _initialize() -> void:
 	_test_head_glances_toward_queued_turn()
 	_test_skin_applies_models()
 	_test_links_fill_the_gaps()
+	_test_worm_ignores_layer_focus()
 	_test_segments_touch()
 	_test_band_marks_one_segment()
 	_test_bulge_scale()
@@ -114,6 +115,16 @@ func _test_links_fill_the_gaps() -> void:
 		assert(mid.distance_to((a + b) * 0.5) < 1e-4, "연결부 %d 는 두 마디의 가운데다" % j)
 		assert(a.distance_to(b) < Tuning.SEGMENT_SIZE + 0.2 + 1.0, "마디 사이가 한 칸 안쪽이다")
 	assert(wv.links.multimesh.mesh == wv.body.multimesh.mesh, "연결부는 마디와 같은 메시다")
+	wv.queue_free()
+
+# 지렁이 자신은 층 구분(유령 패스)을 받지 않는다: 머리와 몸이 다른 층에 걸쳐도 또렷하다.
+func _test_worm_ignores_layer_focus() -> void:
+	var wv := WormView.new()
+	root.add_child(wv)
+	for m: ShaderMaterial in [wv.body.material_override, wv.links.material_override, wv.head.get_surface_override_material(0)]:
+		assert(m.get_shader_parameter("ignore_focus") == true, "지렁이 재질은 층 구분을 건너뛴다")
+		var p := m.next_pass as ShaderMaterial
+		assert(p == null or p.shader != WormView.GHOST, "지렁이에는 유령 패스가 없다")
 	wv.queue_free()
 
 # 마디는 길이 방향으로 늘어나 이웃 마디와 맞닿는다(한 칸 간격보다 길다).

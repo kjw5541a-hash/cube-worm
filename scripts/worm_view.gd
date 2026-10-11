@@ -21,7 +21,7 @@ var _glance_dir := Vector3.ZERO
 var _dead_time := 0.0
 
 # 공용 셰이더 재질. xray 면 가려진 부분이 비쳐 보이는 두 번째 패스를 붙인다. band 는 밝은 띠 마디의 색.
-static func material(color: Color, emission := 0.0, xray := false, band := Color.WHITE) -> ShaderMaterial:
+static func material(color: Color, emission := 0.0, xray := false, band := Color.WHITE, own := false) -> ShaderMaterial:
 	var m := ShaderMaterial.new()
 	m.shader = SHADER
 	m.set_shader_parameter("albedo", color)
@@ -29,14 +29,21 @@ static func material(color: Color, emission := 0.0, xray := false, band := Color
 	m.set_shader_parameter("emission", emission)
 	m.set_shader_parameter("box_height", float(Tuning.BOX))
 	m.set_shader_parameter("min_bright", Tuning.DEPTH_MIN_BRIGHT)
-	var ghost := ShaderMaterial.new()  # 다른 층에서는 이 패스만 보인다
-	ghost.shader = GHOST
-	ghost.set_shader_parameter("albedo", color)
-	m.next_pass = ghost
+	# own: 지렁이 자신. 머리와 다음 마디가 다른 층에 걸쳐도 흐려지지 않게 층 구분(유령 패스)을 건너뛴다.
+	var tail: ShaderMaterial = m
+	if own:
+		m.set_shader_parameter("ignore_focus", true)
+	else:
+		var ghost := ShaderMaterial.new()  # 다른 층에서는 이 패스만 보인다
+		ghost.shader = GHOST
+		ghost.set_shader_parameter("albedo", color)
+		m.next_pass = ghost
+		tail = ghost
 	if xray:
 		var x := ShaderMaterial.new()
 		x.shader = XRAY
-		ghost.next_pass = x
+		x.set_shader_parameter("ignore_focus", own)
+		tail.next_pass = x
 	return m
 
 # 꼬리 끝에서 k 번째(마지막 = 0) 마디의 크기 배율. k = -1 은 막 돋아나는 마디(크기 0).
@@ -119,13 +126,13 @@ func apply_skin(index: int) -> void:
 	var seg := Models.load_model(skin["segment"])
 	var c: Color = seg["colors"][0]
 	body.multimesh.mesh = seg["mesh"]
-	body.material_override = material(c, 0.0, false, c.lerp(Color.WHITE, 0.5))
+	body.material_override = material(c, 0.0, false, c.lerp(Color.WHITE, 0.5), true)
 	links.multimesh.mesh = seg["mesh"]
-	links.material_override = material(c)  # 연결부에는 띠가 없다
+	links.material_override = material(c, 0.0, false, Color.WHITE, true)  # 연결부에는 띠가 없다
 	var hd := Models.load_model(skin["head"])
 	head.mesh = hd["mesh"]
 	for i in hd["colors"].size():
-		head.set_surface_override_material(i, material(hd["colors"][i], 0.0, true))
+		head.set_surface_override_material(i, material(hd["colors"][i], 0.0, true, Color.WHITE, true))
 
 func setup(g: Game) -> void:
 	game = g
