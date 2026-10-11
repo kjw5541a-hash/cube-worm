@@ -5,6 +5,7 @@ func _initialize() -> void:
 	_test_bug_markers_per_kind()
 	_test_box_follows_height_and_extra_bugs()
 	_test_rock_markers()
+	_test_markers_draw_behind_objects()
 	_test_rocks_use_the_model()
 	_test_rock_basis_is_axis_aligned_and_stable()
 	_test_ghost_is_pulled_into_the_head()
@@ -83,6 +84,20 @@ func _test_rock_markers() -> void:
 	assert(fv.rock_rings[0].visible and fv.rock_rings[1].visible and not fv.rock_rings[2].visible, "바위 수만큼 고리")
 	assert(not fv.rock_stems[0].visible, "같은 층 바위에는 기둥이 없다")
 	assert(fv.rock_stems[1].visible and fv.rock_stems[1].scale.y > 1.0, "다른 층 바위는 기둥으로 머리 층과 이어진다")
+	fv.queue_free()
+
+# 고리·기둥은 깊이를 쓰지 않고 먼저 그려져, 지렁이 몸을 관통해 보이지 않는다.
+func _test_markers_draw_behind_objects() -> void:
+	var fv := _view(_game())
+	var all: Array[MeshInstance3D] = []
+	all.append_array(fv.rings)
+	all.append_array(fv.stems)
+	all.append_array(fv.rock_rings)
+	all.append_array(fv.rock_stems)
+	for m in all:
+		var mat := m.material_override as BaseMaterial3D
+		assert(mat.depth_draw_mode == BaseMaterial3D.DEPTH_DRAW_DISABLED, "마커는 깊이를 쓰지 않는다")
+		assert(mat.render_priority > fv._soil.render_priority and mat.render_priority < 0, "상자 다음, 물체(0)보다 먼저 그린다")
 	fv.queue_free()
 
 func _test_rocks_use_the_model() -> void:

@@ -4,6 +4,8 @@ extends Node3D
 # 흙 상자, 바위, 벌레(종류 3가지), 머리 층의 아래·위 판, 벌레 고리·기둥, 머리로 빨려 드는 벌레.
 
 const ROCK_MODEL := "res://assets/models/rock.glb"
+const BOX_PRIORITY := -20     # 흙 상자가 가장 먼저
+const MARKER_PRIORITY := -10  # 그다음 고리·기둥, 그 뒤에 지렁이·바위·벌레
 const PLANE_INSET := 0.02
 const ROCK_MARKER_COLOR := Color(0.72, 0.74, 0.8)
 const MAX_PER_KIND := 3  # 한 종류 벌레가 한 판에 가장 많이 나오는 수(레벨 7~8)
@@ -37,6 +39,7 @@ func _init() -> void:
 	box.mesh = bm
 	_soil = ShaderMaterial.new()
 	_soil.shader = preload("res://shaders/soil_box.gdshader")
+	_soil.render_priority = BOX_PRIORITY
 	box.material_override = _soil
 	add_child(box)
 
@@ -70,23 +73,29 @@ func _init() -> void:
 	stem_mesh.top_radius = 0.03
 	stem_mesh.bottom_radius = 0.03
 	stem_mesh.height = 1.0
-	var rock_marker := StandardMaterial3D.new()
-	rock_marker.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	rock_marker.albedo_color = ROCK_MARKER_COLOR
+	var rock_marker := _marker_material(ROCK_MARKER_COLOR)
 	for i in Tuning.ROCK_COUNT:
 		rock_rings.append(_mesh(ring_mesh, rock_marker))
 		rock_stems.append(_mesh(stem_mesh, rock_marker))
 	for k in Tuning.BUG_COUNT:
 		var model := Models.load_model(Skins.BUGS[k]["model"])
-		var marker := StandardMaterial3D.new()
-		marker.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		marker.albedo_color = Skins.BUGS[k]["color"]  # 고리·기둥 색은 종류 색
+		var marker := _marker_material(Skins.BUGS[k]["color"])  # 고리·기둥 색은 종류 색
 		for j in MAX_PER_KIND:
 			bugs.append(_bug_node(model, true))
 			rings.append(_mesh(ring_mesh, marker))
 			stems.append(_mesh(stem_mesh, marker))
 		ghosts.append(_bug_node(model, false))
 		ghosts[k].visible = false
+
+# 고리·기둥 재질. 깊이를 쓰지 않고 상자 다음, 물체보다 먼저 그려서 지렁이·바위·벌레는 늘 마커 위에 온다.
+# 마커는 머리 층 높이에 떠 있어 화면에서 지렁이 몸과 겹치는데, 그냥 두면 지렁이를 관통해 보인다.
+func _marker_material(color: Color) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.albedo_color = color
+	m.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	m.render_priority = MARKER_PRIORITY
+	return m
 
 # 벌레 메시에 공용 셰이더 재질을 씌운다(은은하게 빛난다). xray 면 가려졌을 때 비친다.
 func _bug_node(model: Dictionary, xray: bool) -> MeshInstance3D:
