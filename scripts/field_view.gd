@@ -5,6 +5,7 @@ extends Node3D
 
 const ROCK_MODEL := "res://assets/models/rock.glb"
 const PLANE_INSET := 0.02
+const ROCK_MARKER_COLOR := Color(0.72, 0.74, 0.8)
 const MAX_PER_KIND := 3  # 한 종류 벌레가 한 판에 가장 많이 나오는 수(레벨 7~8)
 
 var game: Game
@@ -15,6 +16,8 @@ var plane_top := MeshInstance3D.new()  # 같은 층의 천장 판
 var bugs: Array[MeshInstance3D] = []    # 종류 k 의 j 번째 벌레 = k * MAX_PER_KIND + j
 var rings: Array[MeshInstance3D] = []
 var stems: Array[MeshInstance3D] = []
+var rock_rings: Array[MeshInstance3D] = []  # 바위 i 의 머리 층 고리·기둥(벌레와 같은 방식)
+var rock_stems: Array[MeshInstance3D] = []
 var ghosts: Array[MeshInstance3D] = []  # 먹히는 중인 벌레(종류마다 하나)
 var focus_layer := 0  # 지금 머리가 있는 층(셰이더 전역 값과 같다)
 var _time := 0.0
@@ -63,6 +66,12 @@ func _init() -> void:
 	stem_mesh.top_radius = 0.03
 	stem_mesh.bottom_radius = 0.03
 	stem_mesh.height = 1.0
+	var rock_marker := StandardMaterial3D.new()
+	rock_marker.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rock_marker.albedo_color = ROCK_MARKER_COLOR
+	for i in Tuning.ROCK_COUNT:
+		rock_rings.append(_mesh(ring_mesh, rock_marker))
+		rock_stems.append(_mesh(stem_mesh, rock_marker))
 	for k in Tuning.BUG_COUNT:
 		var model := Models.load_model(Skins.BUGS[k]["model"])
 		var marker := StandardMaterial3D.new()
@@ -148,6 +157,20 @@ func _update() -> void:
 				stems[b].visible = true
 				stems[b].position = Vector3(p.x, head_y + gap * 0.5, p.z)
 				stems[b].scale = Vector3(1, absf(gap), 1)
+	var rock_cells := game.field.rocks.keys()
+	for i in rock_rings.size():
+		var has := i < rock_cells.size()
+		rock_rings[i].visible = has
+		rock_stems[i].visible = false
+		if not has:
+			continue
+		var p := WormPath.center(rock_cells[i])
+		rock_rings[i].position = Vector3(p.x, head_y, p.z)
+		var gap := p.y - head_y
+		if absf(gap) > 0.05:
+			rock_stems[i].visible = true
+			rock_stems[i].position = Vector3(p.x, head_y + gap * 0.5, p.z)
+			rock_stems[i].scale = Vector3(1, absf(gap), 1)
 	_update_ghost()
 
 # 벌레의 은은한 발광이 느리게 깜빡인다.

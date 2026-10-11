@@ -8,6 +8,7 @@ var rig := CameraRig.new()
 var field_view := FieldView.new()
 var worm_view := WormView.new()
 var hud := Hud.new()
+var floors := FloorGauge.new()  # 층 눈금(HUD 위에 얹는다)
 var controller := Controller.new()
 var picker := SkinPicker.new()
 var level := 1          # 지금 판의 레벨(= 맵 높이)
@@ -34,6 +35,8 @@ func _ready() -> void:
 	add_child(field_view)
 	add_child(worm_view)
 	add_child(hud)
+	floors.position = Vector2(24, 845)  # 맨 아래 칸의 왼쪽 아래: 지렁이 선택 줄 바로 위
+	hud.add_child(floors)
 	hud.add_child(controller)
 	hud.add_child(picker)
 	controller.steer_pressed.connect(_on_steer)
@@ -54,6 +57,7 @@ func new_game() -> void:
 	hud.set_level(game.level)
 	hud.show_clear(false)
 	field_view.setup(game)
+	floors.update_from(game)
 	worm_view.setup(game)
 	_dead_time = 0.0
 	_was_dead = false
@@ -83,6 +87,7 @@ func _process(delta: float) -> void:
 	game.paused = rig.is_turning()
 	game.advance(delta)
 	hud.set_score(game.score)
+	floors.update_from(game)
 	picker.visible = game.state == Game.State.WAITING  # 시작 전에만 지렁이를 고른다
 	if game.state == Game.State.DEAD:
 		if not _was_dead:

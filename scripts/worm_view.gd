@@ -5,6 +5,7 @@ extends Node3D
 
 const SHADER := preload("res://shaders/worm.gdshader")
 const XRAY := preload("res://shaders/xray.gdshader")
+const GHOST := preload("res://shaders/ghost.gdshader")
 const BAND_INDEX := 3  # 머리 = 0 부터 센 마디 번호. 이 마디가 밝은 띠(지렁이 환대)다
 
 var game: Game
@@ -25,10 +26,14 @@ static func material(color: Color, emission := 0.0, xray := false, band := Color
 	m.set_shader_parameter("emission", emission)
 	m.set_shader_parameter("box_height", float(Tuning.BOX))
 	m.set_shader_parameter("min_bright", Tuning.DEPTH_MIN_BRIGHT)
+	var ghost := ShaderMaterial.new()  # 다른 층에서는 이 패스만 보인다
+	ghost.shader = GHOST
+	ghost.set_shader_parameter("albedo", color)
+	m.next_pass = ghost
 	if xray:
 		var x := ShaderMaterial.new()
 		x.shader = XRAY
-		m.next_pass = x
+		ghost.next_pass = x
 	return m
 
 # 꼬리 끝에서 k 번째(마지막 = 0) 마디의 크기 배율. k = -1 은 막 돋아나는 마디(크기 0).

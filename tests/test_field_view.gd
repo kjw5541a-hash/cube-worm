@@ -4,6 +4,7 @@ func _initialize() -> void:
 	_test_layer_plane_follows_head()
 	_test_bug_markers_per_kind()
 	_test_box_follows_height_and_extra_bugs()
+	_test_rock_markers()
 	_test_rocks_use_the_model()
 	_test_rock_basis_is_axis_aligned_and_stable()
 	_test_ghost_is_pulled_into_the_head()
@@ -70,6 +71,18 @@ func _test_box_follows_height_and_extra_bugs() -> void:
 	g2.field.kinds.assign([1, 1, 1])
 	fv._update()
 	assert(fv.bugs[3].visible and fv.bugs[4].visible and fv.bugs[5].visible and not fv.bugs[0].visible, "같은 종류 3마리를 모두 그린다")
+	fv.queue_free()
+
+# 바위도 벌레처럼 머리 층 높이의 고리를 달고, 다른 층이면 그 고리까지 기둥이 이어진다.
+func _test_rock_markers() -> void:
+	var g := Game.new(4, false, 8)
+	var head_layer := g.worm.head().y
+	g.field.rocks = {Vector3i(1, head_layer, 1): true, Vector3i(2, 0, 2): true}
+	var fv := _view(g)
+	fv._update()
+	assert(fv.rock_rings[0].visible and fv.rock_rings[1].visible and not fv.rock_rings[2].visible, "바위 수만큼 고리")
+	assert(not fv.rock_stems[0].visible, "같은 층 바위에는 기둥이 없다")
+	assert(fv.rock_stems[1].visible and fv.rock_stems[1].scale.y > 1.0, "다른 층 바위는 기둥으로 머리 층과 이어진다")
 	fv.queue_free()
 
 func _test_rocks_use_the_model() -> void:
