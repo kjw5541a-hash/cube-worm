@@ -56,6 +56,7 @@ func _init() -> void:
 	plane.mesh = pm
 	var pmat := ShaderMaterial.new()
 	pmat.shader = preload("res://shaders/layer_plane.gdshader")
+	pmat.set_shader_parameter("tint", Color(0.95, 0.85, 0.6, 0.05))  # 바닥 판 면 색은 거의 투명: 아래 층 지렁이 몸이 뿌옇게 비치지 않게
 	plane.material_override = pmat
 	add_child(plane)
 	plane_top.mesh = pm
