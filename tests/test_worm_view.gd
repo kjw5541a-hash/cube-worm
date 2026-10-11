@@ -6,6 +6,7 @@ func _initialize() -> void:
 	_test_new_tail_grows_from_zero()
 	_test_head_glances_toward_queued_turn()
 	_test_skin_applies_models()
+	_test_links_fill_the_gaps()
 	_test_band_marks_one_segment()
 	_test_bulge_scale()
 	_test_bulge_follows_the_eat()
@@ -96,6 +97,22 @@ func _test_skin_applies_models() -> void:
 			assert(hm != null and hm.next_pass != null, "머리의 모든 면에 공용 셰이더와 비침 패스: 스킨 %d 면 %d" % [i, s])
 		seen[wv.head.mesh] = true
 	assert(seen.size() == Skins.WORMS.size(), "스킨마다 머리 모양이 다르다")
+	wv.queue_free()
+
+# 연결부는 이웃한 두 마디의 한가운데에 있고, 마디가 하나 줄 때마다 하나씩 준다.
+func _test_links_fill_the_gaps() -> void:
+	var g := _game_moving_up()
+	var wv := WormView.new()
+	root.add_child(wv)
+	wv.setup(g)
+	assert(wv.links.multimesh.visible_instance_count == g.worm.length() - 1, "연결부 수 = 길이 - 1")
+	for j in g.worm.length() - 1:
+		var a := WormPath.segment(g.worm, 0, g.alpha).origin if j == 0 else WormView.body_transform(g, j, 0.0).origin
+		var b := WormView.body_transform(g, j + 1, 0.0).origin
+		var mid := WormView.link_transform(g, j, 0.0).origin
+		assert(mid.distance_to((a + b) * 0.5) < 1e-4, "연결부 %d 는 두 마디의 가운데다" % j)
+		assert(a.distance_to(b) < Tuning.SEGMENT_SIZE + 0.2 + 1.0, "마디 사이가 한 칸 안쪽이다")
+	assert(wv.links.multimesh.mesh == wv.body.multimesh.mesh, "연결부는 마디와 같은 메시다")
 	wv.queue_free()
 
 func _test_band_marks_one_segment() -> void:

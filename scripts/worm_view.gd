@@ -5,11 +5,13 @@ extends Node3D
 
 const SHADER := preload("res://shaders/worm.gdshader")
 const XRAY := preload("res://shaders/xray.gdshader")
+const LINK_THICKNESS := 0.92  # 연결부 단면 배율(마디보다 살짝 잘록)
 const BAND_INDEX := 3  # 머리 = 0 부터 센 마디 번호. 이 마디가 밝은 띠(지렁이 환대)다
 
 var game: Game
 var head := MeshInstance3D.new()
 var body := MultiMeshInstance3D.new()
+var links := MultiMeshInstance3D.new()  # 마디 사이를 메우는 연결부
 var skin_index := -1
 var _time := 0.0
 var _glance := 0.0
@@ -77,6 +79,14 @@ static func body_transform(g: Game, j: int, time: float) -> Transform3D:
 	t.basis = t.basis * Basis.from_scale(Vector3(thick, thick, s))
 	return t
 
+# 마디 j 와 j+1 을 잇는 연결부의 변환. 두 마디의 한가운데에 두고, 단면을 조금 줄여 잘록하게 보이게 한다.
+# 마디 크기(0.86)가 칸 간격(1.0)보다 작아 생기던 틈을 메워 지렁이가 하나로 이어져 보인다.
+static func link_transform(g: Game, j: int, time: float) -> Transform3D:
+	var a := WormPath.segment(g.worm, 0, g.alpha) if j == 0 else body_transform(g, j, time)
+	var t := a.interpolate_with(body_transform(g, j + 1, time), 0.5)
+	t.basis = t.basis * Basis.from_scale(Vector3(LINK_THICKNESS, LINK_THICKNESS, 1.0))
+	return t
+
 func _init() -> void:
 	add_child(head)
 	var mm := MultiMesh.new()
@@ -88,6 +98,12 @@ func _init() -> void:
 		mm.set_instance_color(i, instance_color(i))
 	body.multimesh = mm
 	add_child(body)
+	var lm := MultiMesh.new()
+	lm.transform_format = MultiMesh.TRANSFORM_3D
+	lm.instance_count = mm.instance_count
+	lm.visible_instance_count = 0
+	links.multimesh = lm
+	add_child(links)
 	apply_skin(0)
 
 # 지렁이 스킨(Skins.WORMS 번호)을 적용한다. 머리와 마디 메시를 바꾸고 공용 셰이더 재질을 씌운다.
@@ -98,6 +114,8 @@ func apply_skin(index: int) -> void:
 	var c: Color = seg["colors"][0]
 	body.multimesh.mesh = seg["mesh"]
 	body.material_override = material(c, 0.0, false, c.lerp(Color.WHITE, 0.5))
+	links.multimesh.mesh = seg["mesh"]
+	links.material_override = material(c)  # 연결부에는 띠가 없다
 	var hd := Models.load_model(skin["head"])
 	head.mesh = hd["mesh"]
 	for i in hd["colors"].size():
@@ -121,6 +139,9 @@ func _update(delta: float) -> void:
 	mm.visible_instance_count = n - 1
 	for j in range(1, n):
 		mm.set_instance_transform(j - 1, body_transform(game, j, _time))
+	links.multimesh.visible_instance_count = n - 1
+	for j in n - 1:
+		links.multimesh.set_instance_transform(j, link_transform(game, j, _time))
 	head.transform = _head_transform(delta)
 
 # 머리 변환. 다음 방향으로 미리 고개를 돌리는 예고 동작, 먹은 덩어리가 머리를 지날 때의 꿀꺽, 죽을 때의 찌그러짐을 얹는다.
