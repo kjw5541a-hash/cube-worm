@@ -26,11 +26,13 @@ func _test_layer_plane_follows_head() -> void:
 	var g := _game()
 	var fv := _view(g)
 	g.press(Worm.Steer.UP)  # 출발 전 첫 입력은 바로 꺾임: -X 를 보는 지렁이가 위로 간다
-	for i in 10:
+	for i in 120:
 		g.advance(1.0 / 60.0)
 		fv._update()
+		var layer := g.worm.head().y
+		assert(fv.plane.position.y == float(layer) and fv.plane_top.position.y == float(layer + 1), "머리 칸이 있는 층의 아래·위 경계에 판이 놓인다")
 		var head_y := WormPath.segment(g.worm, 0, g.alpha).origin.y
-		assert(absf(fv.plane.position.y - head_y) < 1e-4, "머리 층 판은 머리 높이를 따라간다")
+		assert(head_y >= fv.plane.position.y - 1e-4 and head_y <= fv.plane_top.position.y + 1e-4, "머리는 두 판 사이에 있다(판이 관통하지 않는다)")
 	fv.queue_free()
 
 # 벌레는 종류마다 자기 메시와 색의 고리·기둥을 가진다.
