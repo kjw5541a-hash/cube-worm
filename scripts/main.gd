@@ -12,6 +12,7 @@ var floors := FloorGauge.new()  # 층 눈금(HUD 위에 얹는다)
 var controller := Controller.new()
 var picker := SkinPicker.new()
 var sfx := Sfx.new()
+var title := Title.new()  # 시작 화면: 터치하면 사라지고 게임이 시작을 기다린다
 var level := 1          # 지금 판의 레벨(= 맵 높이)
 var base_score := 0     # 이 레벨을 시작할 때의 점수. 죽으면 여기서 다시 시작한다
 var _dead_time := 0.0
@@ -42,6 +43,8 @@ func _ready() -> void:
 	hud.add_child(floors)
 	hud.add_child(controller)
 	hud.add_child(picker)
+	add_child(title)
+	title.started.connect(_on_title_started)
 	controller.steer_pressed.connect(_on_steer)
 	controller.turn_pressed.connect(_on_turn)
 	hud.turn_pressed.connect(_on_turn)
@@ -120,7 +123,12 @@ func _on_ate(kind: int, points: int, cell: Vector3i) -> void:
 	var at := rig.camera.unproject_position(WormPath.center(cell)) - Vector2(0, 40)
 	hud.pop("+%d" % points, at, Skins.BUGS[kind]["color"])
 
+func _on_title_started() -> void:
+	sfx.start_music()  # 사용자의 첫 터치라서 웹에서도 소리가 풀린다
+
 func _on_steer(steer: int) -> void:
+	if title.visible:
+		return  # 시작 화면 뒤에서 키보드로 출발하지 않게 한다
 	if game.state == Game.State.DEAD or game.state == Game.State.CLEARED:
 		_restart_if_ready()
 		return
@@ -130,6 +138,8 @@ func _on_steer(steer: int) -> void:
 		sfx.play("start" if was_waiting else Sfx.steer_id(steer))
 
 func _on_turn(dir: int) -> void:
+	if title.visible:
+		return
 	if game.state != Game.State.DEAD:
 		rig.turn(dir)
 		sfx.start_music()

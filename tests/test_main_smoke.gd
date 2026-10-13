@@ -20,6 +20,16 @@ func _initialize() -> void:
 	assert(main.sfx != null and not main.sfx.muted and not main.sfx.music_active, "처음에는 소리가 켜져 있고, 첫 입력 전에는 BGM 이 조용하다")
 	assert(game.state == Game.State.WAITING, "처음에는 출발을 기다린다")
 	assert(main.picker.visible and main.worm_view.skin_index == 0, "대기 중에는 지렁이 선택 줄이 보이고 기본 스킨이다")
+	# 시작 화면이 먼저 보이고, 그 뒤에서는 입력이 게임에 닿지 않는다. 터치하면 사라지고 BGM 이 시작된다.
+	assert(main.title.visible, "처음에는 시작 화면이 보인다")
+	main.controller.steer_pressed.emit(Worm.Steer.LEFT)
+	main.controller.turn_pressed.emit(1)
+	assert(game.state == Game.State.WAITING and main.rig.yaw_step == 0 and main.sfx.plays == 0, "시작 화면 뒤에서는 조향·회전 입력이 먹히지 않는다")
+	var title_tap := InputEventScreenTouch.new()
+	title_tap.pressed = true
+	main.title.image._gui_input(title_tap)
+	assert(not main.title.visible and game.state == Game.State.WAITING, "터치하면 시작 화면이 사라지고 게임은 출발을 기다린다")
+	assert(main.sfx.music_active, "시작 화면을 터치하면 BGM 이 시작된다(웹은 이 터치에서 소리가 풀린다)")
 	main.picker.change(1)
 	assert(main.worm_view.skin_index == 1 and SaveData.load_skin() == Skins.WORMS[1]["id"], "고른 스킨이 지렁이에 적용되고 저장된다")
 	main.controller.steer_pressed.emit(Worm.Steer.LEFT)  # 출발 전 첫 입력은 바로 꺾임: -X 를 보는 지렁이의 왼쪽 = +Z
@@ -95,6 +105,7 @@ func _initialize() -> void:
 	var quiet := _screen()
 	await process_frame
 	assert(quiet.sfx.muted and quiet.hud.sound_button.muted, "꺼진 채 저장하면 다음에도 꺼진 채로 시작한다")
+	quiet.title.image._gui_input(title_tap)  # 시작 화면을 넘긴다(꺼진 상태라 BGM 이 시작되지 않아야 한다)
 	quiet.controller.steer_pressed.emit(Worm.Steer.LEFT)
 	assert(not quiet.sfx.music_active and quiet.sfx.plays == 0, "꺼진 채로 시작하면 첫 입력에도 소리가 나지 않는다")
 	SaveData.save_muted(false)
