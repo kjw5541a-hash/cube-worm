@@ -11,6 +11,7 @@ var hud := Hud.new()
 var floors := FloorGauge.new()  # 층 눈금(HUD 위에 얹는다)
 var controller := Controller.new()
 var picker := SkinPicker.new()
+var sfx := Sfx.new()
 var level := 1          # 지금 판의 레벨(= 맵 높이)
 var base_score := 0     # 이 레벨을 시작할 때의 점수. 죽으면 여기서 다시 시작한다
 var _dead_time := 0.0
@@ -34,6 +35,8 @@ func _ready() -> void:
 	add_child(rig)
 	add_child(field_view)
 	add_child(worm_view)
+	add_child(sfx)
+	sfx.muted = SaveData.load_muted()
 	add_child(hud)
 	floors.position = Vector2(24, 845)  # 맨 아래 칸의 왼쪽 아래: 지렁이 선택 줄 바로 위
 	hud.add_child(floors)
@@ -43,6 +46,8 @@ func _ready() -> void:
 	controller.turn_pressed.connect(_on_turn)
 	hud.turn_pressed.connect(_on_turn)
 	picker.skin_changed.connect(_on_skin_changed)
+	hud.sound_toggled.connect(_on_sound_toggled)
+	hud.set_muted(sfx.muted)
 	picker.set_index(Skins.worm_index(SaveData.load_skin()))
 	worm_view.apply_skin(picker.index)
 	level = start_level_requested()
@@ -52,6 +57,7 @@ func new_game() -> void:
 	game = Game.new(randi(), perf_requested(), level)
 	game.score = base_score
 	game.ate.connect(_on_ate)
+	game.cleared.connect(func() -> void: sfx.play("clear"))
 	rig.position = Vector3(Tuning.BOX * 0.5, game.height * 0.5, Tuning.BOX * 0.5)  # 시점은 그대로, 상자 중심을 본다
 	controller.vertical = game.height > 1
 	hud.set_level(game.level)
@@ -61,6 +67,7 @@ func new_game() -> void:
 	worm_view.setup(game)
 	_dead_time = 0.0
 	_was_dead = false
+	sfx.duck(false)
 	hud.show_restart(false)
 
 # 주소 끝 ?level=N(웹) 또는 실행 인자 --level=N(데스크톱)이면 그 레벨에서 시작한다(확인용). 없으면 1.
@@ -93,6 +100,8 @@ func _process(delta: float) -> void:
 		if not _was_dead:
 			_was_dead = true
 			rig.shake()
+			sfx.play("die")
+			sfx.duck(true)
 		_dead_time += delta
 		hud.show_restart(_dead_time >= Tuning.DEATH_DELAY)
 	elif game.state == Game.State.CLEARED:
@@ -100,11 +109,14 @@ func _process(delta: float) -> void:
 		hud.show_clear(_dead_time >= Tuning.CLEAR_DELAY)
 
 func _on_skin_changed(index: int) -> void:
+	sfx.start_music()
+	sfx.play("skin")
 	worm_view.apply_skin(index)
 	SaveData.save_skin(Skins.WORMS[index]["id"])
 
 # 벌레를 먹으면 먹은 칸 위에 점수가 떠오른다. 색은 벌레 종류 색이다.
 func _on_ate(kind: int, points: int, cell: Vector3i) -> void:
+	sfx.play_eat(kind)
 	var at := rig.camera.unproject_position(WormPath.center(cell)) - Vector2(0, 40)
 	hud.pop("+%d" % points, at, Skins.BUGS[kind]["color"])
 
@@ -112,11 +124,16 @@ func _on_steer(steer: int) -> void:
 	if game.state == Game.State.DEAD or game.state == Game.State.CLEARED:
 		_restart_if_ready()
 		return
-	game.press(steer)
+	var was_waiting := game.state == Game.State.WAITING
+	if game.press(steer):  # 받아들여진 입력만 소리가 난다
+		sfx.start_music()
+		sfx.play("start" if was_waiting else Sfx.steer_id(steer))
 
 func _on_turn(dir: int) -> void:
 	if game.state != Game.State.DEAD:
 		rig.turn(dir)
+		sfx.start_music()
+		sfx.play("rotate")
 
 func _unhandled_input(event: InputEvent) -> void:
 	var t := event as InputEventScreenTouch
@@ -131,3 +148,9 @@ func _restart_if_ready() -> void:
 			new_game()
 	elif _dead_time >= Tuning.DEATH_DELAY:
 		new_game()
+
+func _on_sound_toggled(muted: bool) -> void:
+	sfx.set_muted(muted)
+	SaveData.save_muted(muted)
+	if not muted:
+		sfx.start_music()  # 사용자의 입력이므로 웹에서도 재생이 풀린다
