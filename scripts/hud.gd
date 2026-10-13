@@ -4,12 +4,14 @@ extends CanvasLayer
 # 위쪽: 점수, 빌드 버전과 fps, 맵 회전 버튼 2개. 죽은 뒤에는 다시 시작 안내.
 
 signal turn_pressed(dir: int)
+signal sound_toggled(muted: bool)
 
 var score_label := Label.new()
 var info_label := Label.new()
 var restart_label := Label.new()
 var level_label := Label.new()
 var clear_label := Label.new()
+var sound_button := SoundButton.new()
 var _version := str(ProjectSettings.get_setting("application/config/version", "dev"))
 
 func _ready() -> void:
@@ -43,6 +45,10 @@ func _ready() -> void:
 		b.position = Vector2(-120 if d == 1 else -232, 16)
 		b.pressed_dir.connect(turn_pressed.emit)
 		add_child(b)
+	sound_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	sound_button.position = Vector2(-344, 16)  # 회전 버튼 둘(-232, -120) 왼쪽
+	sound_button.toggled.connect(sound_toggled.emit)
+	add_child(sound_button)
 
 func set_score(v: int) -> void:
 	score_label.text = str(v)
@@ -55,6 +61,11 @@ func set_level(n: int) -> void:
 
 func show_clear(on: bool) -> void:
 	clear_label.visible = on
+
+# 저장된 값을 버튼에 반영한다(신호는 내지 않는다).
+func set_muted(on: bool) -> void:
+	sound_button.muted = on
+	sound_button.queue_redraw()
 
 # 벌레를 먹은 점수 "+N" 을 화면 위치 at(뷰포트 좌표)에서 위로 떠올렸다가 사라지게 한다.
 func pop(text: String, at: Vector2, color := Color(1.0, 0.9, 0.45)) -> Label:
@@ -110,3 +121,36 @@ class TurnButton extends Control:
 			c + (tip - tan * 4.0 + out * 10.0) * flip,
 			c + (tip - tan * 4.0 - out * 10.0) * flip,
 		]), Color.WHITE)
+
+# 소리 켜짐·꺼짐 버튼. 스피커 기호가 한글 폰트에 없을 수 있어 직접 그린다.
+class SoundButton extends Control:
+	signal toggled(muted: bool)
+	var muted := false
+
+	func _init() -> void:
+		size = Vector2(104, 104)
+		mouse_filter = Control.MOUSE_FILTER_STOP
+
+	func _gui_input(event: InputEvent) -> void:
+		var t := event as InputEventScreenTouch
+		if t != null and t.pressed:
+			muted = not muted
+			queue_redraw()
+			toggled.emit(muted)
+			accept_event()
+
+	func _draw() -> void:
+		var c := size * 0.5
+		draw_circle(c, 46.0, Color(1, 1, 1, 0.12))
+		var col := Color(1, 1, 1, 0.45 if muted else 1.0)
+		# 스피커: 네모 + 나팔
+		draw_colored_polygon(PackedVector2Array([
+			c + Vector2(-22, -9), c + Vector2(-10, -9), c + Vector2(4, -22),
+			c + Vector2(4, 22), c + Vector2(-10, 9), c + Vector2(-22, 9),
+		]), col)
+		if muted:  # ✕
+			draw_line(c + Vector2(12, -12), c + Vector2(30, 12), col, 5.0, true)
+			draw_line(c + Vector2(30, -12), c + Vector2(12, 12), col, 5.0, true)
+		else:  # 소리 파동 두 겹
+			for r in [14.0, 24.0]:
+				draw_arc(c + Vector2(4, 0), r, deg_to_rad(-45.0), deg_to_rad(45.0), 12, col, 4.0, true)
