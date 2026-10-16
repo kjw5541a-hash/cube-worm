@@ -6,6 +6,9 @@ extends CanvasLayer
 
 signal started
 
+# 게임 방식. 방식 선택 화면의 버튼 순서와 같다.
+enum Mode { CLASSIC, TIME_ATTACK }
+
 const IMAGE := "res://assets/title.jpg"
 
 var image := Picture.new()

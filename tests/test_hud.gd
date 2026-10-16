@@ -3,6 +3,8 @@ extends SceneTree
 func _initialize() -> void:
 	await _test_pop_rises_and_disappears()
 	_test_sound_button()
+	_test_mode_display()
+	_test_menu_button()
 	print("test_hud: OK")
 	quit()
 
@@ -40,4 +42,52 @@ func _test_sound_button() -> void:
 	assert(hud.sound_button.muted, "손가락을 뗄 때는 바뀌지 않는다")
 	var turn_xs: Array = hud.get_children().filter(func(n: Node) -> bool: return n is Hud.TurnButton).map(func(b: Control) -> float: return b.position.x)
 	assert(turn_xs.size() == 2 and hud.sound_button.position.x < turn_xs.min(), "소리 버튼은 회전 버튼들 왼쪽에 있다")
+	hud.queue_free()
+
+# 방식별 표시: 기존 방식은 점수와 레벨, 타임어택은 타이머·남은 벌레·최고 시간.
+func _test_mode_display() -> void:
+	var hud := Hud.new()
+	root.add_child(hud)
+	hud.set_mode(Title.Mode.CLASSIC)
+	assert(hud.score_label.visible and not hud.timer_label.visible and not hud.bugs_label.visible, "기존 방식은 점수만 보인다")
+	hud.set_level(3)
+	assert(hud.level_label.text == "레벨 3", "레벨 글자")
+	hud.set_best_score(128)
+	assert(hud.best_label.text == "최고 128", "최고 점수")
+	hud.set_best_score(0)
+	assert(hud.best_label.text == "최고 --", "기록이 없으면 최고 --")
+	hud.set_mode(Title.Mode.TIME_ATTACK)
+	assert(not hud.score_label.visible and hud.timer_label.visible and hud.bugs_label.visible, "타임어택은 타이머와 남은 벌레가 보이고 점수는 숨는다")
+	assert(hud.level_label.text == "타임어택", "가운데 글자")
+	hud.set_timer(12.34)
+	assert(hud.timer_label.text == "12.3", "타이머는 소수 첫째 자리: %s" % hud.timer_label.text)
+	hud.set_timer(0.0)
+	assert(hud.timer_label.text == "0.0", "출발 전 타이머")
+	hud.set_bugs_left(6)
+	assert(hud.bugs_label.text == "남은 벌레 6", "남은 벌레")
+	hud.set_best_time(42310)
+	assert(hud.best_label.text == "최고 42.31초", "최고 시간은 소수 둘째 자리")
+	hud.set_best_time(0)
+	assert(hud.best_label.text == "최고 --", "기록이 없으면 최고 --")
+	hud.set_clear_text("a\nb")
+	assert(hud.clear_label.text == "a\nb", "클리어 문구를 바꾼다")
+	hud.set_mode(Title.Mode.CLASSIC)
+	assert(hud.clear_label.text == Hud.CLEAR_TEXT and hud.score_label.visible and not hud.timer_label.visible, "기존 방식으로 돌아오면 클리어 문구와 점수가 돌아온다")
+	assert(hud.level_label.position.x == Hud.HEADER_X and hud.best_label.position.x == Hud.HEADER_X, "가운데 글자는 점수·타이머와 오른쪽 버튼 사이에 놓는다")
+	hud.queue_free()
+
+func _test_menu_button() -> void:
+	var hud := Hud.new()
+	root.add_child(hud)
+	var got := [0]
+	hud.menu_pressed.connect(func() -> void: got[0] += 1)
+	var tap := InputEventScreenTouch.new()
+	tap.pressed = true
+	hud.menu_button._gui_input(tap)
+	assert(got[0] == 1, "메뉴 버튼을 누르면 신호가 온다")
+	var release := InputEventScreenTouch.new()
+	release.pressed = false
+	hud.menu_button._gui_input(release)
+	assert(got[0] == 1, "손가락을 뗄 때는 신호가 없다")
+	assert(hud.menu_button.position.x < 100.0 and hud.menu_button.position.y > hud.score_label.position.y + 100.0, "메뉴 버튼은 왼쪽 위, 점수 아래에 있다")
 	hud.queue_free()

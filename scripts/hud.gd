@@ -1,10 +1,17 @@
 class_name Hud
 extends CanvasLayer
 
-# 위쪽: 점수, 빌드 버전과 fps, 맵 회전 버튼 2개. 죽은 뒤에는 다시 시작 안내.
+# 위쪽: 점수(타임어택은 타이머), 빌드 버전과 fps, 가운데 레벨·최고 기록, 소리·맵 회전 버튼. 죽은 뒤에는 다시 시작 안내.
+# 왼쪽 위 메뉴 버튼은 방식 선택 화면으로 돌아간다.
 
 signal turn_pressed(dir: int)
 signal sound_toggled(muted: bool)
+signal menu_pressed
+
+# 가운데 글자(레벨 또는 타임어택, 그 아래 최고 기록)의 왼쪽 끝과 폭: 왼쪽 점수·타이머와 오른쪽 버튼 사이에 놓는다.
+const HEADER_X := 190.0
+const HEADER_W := 180.0
+const CLEAR_TEXT := "레벨 클리어!\n탭하면 다음 레벨"
 
 var score_label := Label.new()
 var info_label := Label.new()
@@ -12,6 +19,10 @@ var restart_label := Label.new()
 var level_label := Label.new()
 var clear_label := Label.new()
 var sound_button := SoundButton.new()
+var timer_label := Label.new()   # 타임어택 타이머(점수 자리)
+var best_label := Label.new()    # 레벨 글자 아래 최고 기록
+var bugs_label := Label.new()    # 타임어택 남은 벌레
+var menu_button := HomeButton.new()
 var _version := str(ProjectSettings.get_setting("application/config/version", "dev"))
 
 func _ready() -> void:
@@ -29,10 +40,26 @@ func _ready() -> void:
 	restart_label.offset_top = 130
 	restart_label.visible = false
 	add_child(restart_label)
-	level_label.position = Vector2(262, 20)
+	level_label.position = Vector2(HEADER_X, 20)
+	level_label.custom_minimum_size = Vector2(HEADER_W, 0)
+	level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	level_label.add_theme_font_size_override("font_size", 40)
 	add_child(level_label)
-	clear_label.text = "레벨 클리어!\n탭하면 다음 레벨"
+	best_label.position = Vector2(HEADER_X, 70)
+	best_label.custom_minimum_size = Vector2(HEADER_W, 0)
+	best_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	best_label.add_theme_font_size_override("font_size", 26)
+	best_label.modulate = Color(1, 1, 1, 0.75)
+	add_child(best_label)
+	timer_label.position = Vector2(24, 16)
+	timer_label.add_theme_font_size_override("font_size", 48)
+	timer_label.visible = false
+	add_child(timer_label)
+	bugs_label.position = Vector2(24, 108)
+	bugs_label.add_theme_font_size_override("font_size", 26)
+	bugs_label.visible = false
+	add_child(bugs_label)
+	clear_label.text = CLEAR_TEXT
 	clear_label.add_theme_font_size_override("font_size", 44)
 	clear_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	clear_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
@@ -49,6 +76,9 @@ func _ready() -> void:
 	sound_button.position = Vector2(-344, 16)  # 회전 버튼 둘(-232, -120) 왼쪽
 	sound_button.toggled.connect(sound_toggled.emit)
 	add_child(sound_button)
+	menu_button.position = Vector2(24, 150)
+	menu_button.pressed.connect(menu_pressed.emit)
+	add_child(menu_button)
 
 func set_score(v: int) -> void:
 	score_label.text = str(v)
@@ -61,6 +91,36 @@ func set_level(n: int) -> void:
 
 func show_clear(on: bool) -> void:
 	clear_label.visible = on
+
+# 클리어 문구(타임어택은 걸린 시간과 기록이 들어간다).
+func set_clear_text(text: String) -> void:
+	clear_label.text = text
+
+# 방식별 표시: 기존 방식은 점수, 타임어택은 타이머와 남은 벌레.
+func set_mode(mode: int) -> void:
+	var time_attack := mode == Title.Mode.TIME_ATTACK
+	score_label.visible = not time_attack
+	timer_label.visible = time_attack
+	bugs_label.visible = time_attack
+	if time_attack:
+		level_label.text = "타임어택"
+	else:
+		clear_label.text = CLEAR_TEXT
+
+# 타임어택 타이머(초). 소수 첫째 자리까지 보인다.
+func set_timer(seconds: float) -> void:
+	timer_label.text = Records.format_time(Records.to_ms(seconds), 1)
+
+func set_bugs_left(n: int) -> void:
+	bugs_label.text = "남은 벌레 %d" % n
+
+# 기존 방식 최고 점수. 기록이 없으면 --.
+func set_best_score(best: int) -> void:
+	best_label.text = "최고 %d" % best if best > 0 else "최고 --"
+
+# 타임어택 최고 시간(밀리초). 기록이 없으면 --.
+func set_best_time(ms: int) -> void:
+	best_label.text = "최고 %s초" % Records.format_time(ms, 2) if ms > 0 else "최고 --"
 
 # 저장된 값을 버튼에 반영한다(신호는 내지 않는다).
 func set_muted(on: bool) -> void:
@@ -154,3 +214,31 @@ class SoundButton extends Control:
 		else:  # 소리 파동 두 겹
 			for r in [14.0, 24.0]:
 				draw_arc(c + Vector2(4, 0), r, deg_to_rad(-45.0), deg_to_rad(45.0), 12, col, 4.0, true)
+
+# 게임 중 방식 선택 화면으로 돌아가는 작은 버튼. 글자는 라벨, 바탕은 직접 그린다.
+class HomeButton extends Control:
+	signal pressed
+	var _label := Label.new()
+	var _style := StyleBoxFlat.new()
+
+	func _init() -> void:
+		size = Vector2(120.0, 68.0)
+		mouse_filter = Control.MOUSE_FILTER_STOP
+		_style.bg_color = Color(1, 1, 1, 0.12)
+		_style.set_corner_radius_all(24)
+		_label.text = "메뉴"
+		_label.add_theme_font_size_override("font_size", 30)
+		_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(_label)
+
+	func _gui_input(event: InputEvent) -> void:
+		var t := event as InputEventScreenTouch
+		if t != null and t.pressed:
+			pressed.emit()
+			accept_event()
+
+	func _draw() -> void:
+		draw_style_box(_style, Rect2(Vector2.ZERO, size))
