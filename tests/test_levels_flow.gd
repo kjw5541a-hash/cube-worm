@@ -9,7 +9,8 @@ func _initialize() -> void:
 	var main: Node = load("res://scenes/main.tscn").instantiate()
 	view.add_child(main)
 	await process_frame
-	main.title.image.tapped.emit()  # 시작 화면을 넘긴다
+	main.title.image.tapped.emit()  # 시작 그림을 넘긴다(방식 선택이 열린다)
+	main.title.buttons[Title.Mode.CLASSIC].chosen.emit()  # 기존 방식
 	assert(main.level == 1 and main.game.height == 1 and not main.controller.vertical, "첫 판은 1층, 위아래 버튼 꺼짐")
 	assert(is_equal_approx(main.rig.position.y, 0.5), "카메라는 1층 가운데를 본다")
 

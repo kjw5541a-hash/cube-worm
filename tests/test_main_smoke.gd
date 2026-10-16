@@ -28,8 +28,13 @@ func _initialize() -> void:
 	var title_tap := InputEventScreenTouch.new()
 	title_tap.pressed = true
 	main.title.image._gui_input(title_tap)
-	assert(not main.title.visible and game.state == Game.State.WAITING, "터치하면 시작 화면이 사라지고 게임은 출발을 기다린다")
+	assert(main.title.visible and main.title.in_menu and game.state == Game.State.WAITING, "첫 터치로 방식 선택이 열린다(아직 시작 화면 위)")
 	assert(main.sfx.music_active, "시작 화면을 터치하면 BGM 이 시작된다(웹은 이 터치에서 소리가 풀린다)")
+	main.controller.steer_pressed.emit(Worm.Steer.LEFT)
+	assert(game.state == Game.State.WAITING, "방식 선택 중에도 입력이 게임에 닿지 않는다")
+	main.title.buttons[Title.Mode.CLASSIC]._gui_input(title_tap)
+	assert(not main.title.visible and main.game != game and main.game.state == Game.State.WAITING, "기존 방식을 고르면 새 판이 출발을 기다린다")
+	game = main.game
 	main.picker.change(1)
 	assert(main.worm_view.skin_index == 1 and SaveData.load_skin() == Skins.WORMS[1]["id"], "고른 스킨이 지렁이에 적용되고 저장된다")
 	main.controller.steer_pressed.emit(Worm.Steer.LEFT)  # 출발 전 첫 입력은 바로 꺾임: -X 를 보는 지렁이의 왼쪽 = +Z
@@ -106,6 +111,7 @@ func _initialize() -> void:
 	await process_frame
 	assert(quiet.sfx.muted and quiet.hud.sound_button.muted, "꺼진 채 저장하면 다음에도 꺼진 채로 시작한다")
 	quiet.title.image._gui_input(title_tap)  # 시작 화면을 넘긴다(꺼진 상태라 BGM 이 시작되지 않아야 한다)
+	quiet.title.buttons[Title.Mode.CLASSIC]._gui_input(title_tap)
 	quiet.controller.steer_pressed.emit(Worm.Steer.LEFT)
 	assert(not quiet.sfx.music_active and quiet.sfx.plays == 0, "꺼진 채로 시작하면 첫 입력에도 소리가 나지 않는다")
 	SaveData.save_muted(false)

@@ -50,11 +50,13 @@ func _ready() -> void:
 	hud.add_child(picker)
 	add_child(title)
 	title.started.connect(_on_title_started)
+	title.mode_chosen.connect(_on_mode_chosen)
 	controller.steer_pressed.connect(_on_steer)
 	controller.turn_pressed.connect(_on_turn)
 	hud.turn_pressed.connect(_on_turn)
 	picker.skin_changed.connect(_on_skin_changed)
 	hud.sound_toggled.connect(_on_sound_toggled)
+	hud.menu_pressed.connect(_on_menu_pressed)
 	hud.set_muted(sfx.muted)
 	picker.set_index(Skins.worm_index(SaveData.load_skin()))
 	worm_view.apply_skin(picker.index)
@@ -156,6 +158,16 @@ func _on_ate(kind: int, points: int, cell: Vector3i) -> void:
 func _on_title_started() -> void:
 	sfx.start_music()  # 사용자의 첫 터치라서 웹에서도 소리가 풀린다
 
+# 방식 선택 화면에서 방식 버튼을 눌렀다.
+func _on_mode_chosen(m: int) -> void:
+	sfx.play("start")
+	start_mode(m)
+
+# 게임 중 HUD 의 메뉴 버튼: 최신 기록을 읽어 방식 선택 화면으로 돌아간다(게임은 그 동안 멈춘다).
+func _on_menu_pressed() -> void:
+	_refresh_records()
+	title.show_menu()
+
 func _on_steer(steer: int) -> void:
 	if title.visible:
 		return  # 시작 화면 뒤에서 키보드로 출발하지 않게 한다
@@ -225,6 +237,7 @@ func _update_best_score() -> void:
 func _refresh_records() -> void:
 	best_score = SaveData.load_best_score()
 	best_time_ms = SaveData.load_best_time_ms(Records.time_layout())
+	title.set_records(best_score, best_time_ms)
 	if mode == Title.Mode.CLASSIC:
 		hud.set_best_score(best_score)
 	else:

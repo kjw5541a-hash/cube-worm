@@ -23,6 +23,7 @@ func _initialize() -> void:
 	_test_time_attack_death_retries_same_layout()
 	_test_time_attack_clear_records()
 	_test_game_stops_while_title_is_open()
+	_test_menu_flow()
 	_test_rotation_pauses_timer()  # 회전 애니메이션이 끝나지 않은 채 남으므로 마지막에 둔다
 	_reset()
 	print("test_modes_flow: OK")
@@ -176,3 +177,45 @@ func _test_rotation_pauses_timer() -> void:
 	_main.rig.turn(1)
 	_main._process(0.1)
 	assert(g.elapsed == t, "맵이 도는 동안에는 타이머가 멈춘다")
+
+# 시작 그림 → 방식 선택 → 판 → 메뉴 버튼 → 다시 선택: 화면 흐름과 최고 기록 표시.
+func _test_menu_flow() -> void:
+	_reset()
+	SaveData.save_best_score(128)
+	SaveData.save_best_time_ms(42310, Records.time_layout())
+	var view := SubViewport.new()
+	view.size = Vector2i(720, 1280)
+	root.add_child(view)
+	var main: Node = load("res://scenes/main.tscn").instantiate()
+	view.add_child(main)
+	var tap := InputEventScreenTouch.new()
+	tap.pressed = true
+	assert(main.title.visible and not main.title.in_menu, "처음에는 시작 그림")
+	main.title.image._gui_input(tap)
+	assert(main.title.in_menu and main.sfx.music_active, "첫 터치로 방식 선택이 열리고 BGM 이 시작된다")
+	assert(main.title.buttons[Title.Mode.CLASSIC].record.text == "최고 점수 128", "방식 선택에 최고 점수")
+	assert(main.title.buttons[Title.Mode.TIME_ATTACK].record.text == "최고 기록 42.31초", "방식 선택에 최고 시간")
+	main.title.buttons[Title.Mode.TIME_ATTACK]._gui_input(tap)
+	assert(not main.title.visible and main.mode == Title.Mode.TIME_ATTACK and main.game.height == Tuning.TIME_LEVEL, "타임어택을 고르면 레벨 8 판이 준비된다")
+	assert(main.sfx.last_id == "start" and main.hud.best_label.text == "최고 42.31초", "시작 소리, HUD 에 최고 시간")
+	# 게임 중 메뉴 버튼: 최신 기록을 읽어 선택 화면으로 돌아오고, 그동안 게임은 멈춘다.
+	var running: Game = main.game
+	running.press(Worm.Steer.LEFT)
+	main._process(0.2)
+	var t := running.elapsed
+	SaveData.save_best_score(200)
+	main.hud.menu_button._gui_input(tap)
+	assert(main.title.visible and main.title.in_menu, "메뉴 버튼으로 방식 선택 화면에 돌아온다")
+	assert(main.title.buttons[Title.Mode.CLASSIC].record.text == "최고 점수 200", "돌아오면 최신 기록을 다시 읽는다")
+	main._process(1.0)
+	assert(running.elapsed == t, "선택 화면이 떠 있는 동안 게임이 멈춘다")
+	main.controller.steer_pressed.emit(Worm.Steer.LEFT)
+	assert(main.game == running, "선택 화면 뒤에서는 입력이 게임에 닿지 않는다")
+	# 같은 방식을 다시 골라도 새 판이다.
+	main.title.buttons[Title.Mode.TIME_ATTACK]._gui_input(tap)
+	assert(main.game != running and main.game.elapsed == 0.0 and main.game.state == Game.State.WAITING, "같은 방식을 다시 골라도 새 판이다")
+	main.hud.menu_button._gui_input(tap)
+	main.title.buttons[Title.Mode.CLASSIC]._gui_input(tap)
+	assert(main.mode == Title.Mode.CLASSIC and main.level == 1 and main.game.score == 0, "기존 방식은 새 세션(레벨 1, 점수 0)")
+	assert(main.hud.level_label.text == "레벨 1" and main.hud.score_label.visible and not main.hud.timer_label.visible, "기존 방식 HUD 로 돌아온다")
+	view.queue_free()
