@@ -29,7 +29,7 @@ func _ready() -> void:
 	score_label.position = Vector2(24, 16)
 	score_label.add_theme_font_size_override("font_size", 48)
 	add_child(score_label)
-	info_label.position = Vector2(24, 80)
+	info_label.position = Vector2(24, 88)  # 빌드 문구는 길어서 가운데까지 뻗는다: 그 위의 레벨·최고 글자와 세로로 비켜 놓는다
 	info_label.add_theme_font_size_override("font_size", 18)
 	info_label.modulate = Color(1, 1, 1, 0.6)
 	add_child(info_label)
@@ -40,23 +40,23 @@ func _ready() -> void:
 	restart_label.offset_top = 130
 	restart_label.visible = false
 	add_child(restart_label)
-	level_label.position = Vector2(HEADER_X, 20)
+	level_label.position = Vector2(HEADER_X, 0)
 	level_label.custom_minimum_size = Vector2(HEADER_W, 0)
 	level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	level_label.add_theme_font_size_override("font_size", 40)
+	level_label.add_theme_font_size_override("font_size", 38)
 	add_child(level_label)
-	best_label.position = Vector2(HEADER_X, 70)
+	best_label.position = Vector2(HEADER_X, 52)
 	best_label.custom_minimum_size = Vector2(HEADER_W, 0)
 	best_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	best_label.add_theme_font_size_override("font_size", 26)
+	best_label.add_theme_font_size_override("font_size", 24)
 	best_label.modulate = Color(1, 1, 1, 0.75)
 	add_child(best_label)
 	timer_label.position = Vector2(24, 16)
 	timer_label.add_theme_font_size_override("font_size", 48)
 	timer_label.visible = false
 	add_child(timer_label)
-	bugs_label.position = Vector2(24, 108)
-	bugs_label.add_theme_font_size_override("font_size", 26)
+	bugs_label.position = Vector2(24, 112)
+	bugs_label.add_theme_font_size_override("font_size", 24)
 	bugs_label.visible = false
 	add_child(bugs_label)
 	clear_label.text = CLEAR_TEXT

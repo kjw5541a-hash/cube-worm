@@ -5,6 +5,7 @@ func _initialize() -> void:
 	_test_sound_button()
 	_test_mode_display()
 	_test_menu_button()
+	_test_header_layout()
 	print("test_hud: OK")
 	quit()
 
@@ -90,4 +91,24 @@ func _test_menu_button() -> void:
 	hud.menu_button._gui_input(release)
 	assert(got[0] == 1, "손가락을 뗄 때는 신호가 없다")
 	assert(hud.menu_button.position.x < 100.0 and hud.menu_button.position.y > hud.score_label.position.y + 100.0, "메뉴 버튼은 왼쪽 위, 점수 아래에 있다")
+	hud.queue_free()
+
+# 왼쪽 위 빌드 문구(info)는 길어서 가운데 글자 자리까지 뻗는다. 가운데 레벨·최고 글자는 세로로 비켜 겹치지 않아야 하고,
+# 왼쪽 열(빌드 문구 → 남은 벌레 → 메뉴 버튼)도 위아래로 이어져야 한다. 라벨 상자 높이로 잰다(상자 안 여백만큼 2~6px 겹침은 눈에 안 띈다).
+func _test_header_layout() -> void:
+	var hud := Hud.new()
+	root.add_child(hud)
+	hud.set_level(5)
+	hud.set_mode(Title.Mode.TIME_ATTACK)
+	hud.set_best_time(42310)
+	hud.set_bugs_left(9)
+	hud._process(0.0)  # 빌드 문구를 채운다
+	var level_bottom: float = hud.level_label.position.y + hud.level_label.get_combined_minimum_size().y
+	var best_bottom: float = hud.best_label.position.y + hud.best_label.get_combined_minimum_size().y
+	var info_bottom: float = hud.info_label.position.y + hud.info_label.get_combined_minimum_size().y
+	var bugs_bottom: float = hud.bugs_label.position.y + hud.bugs_label.get_combined_minimum_size().y
+	assert(level_bottom <= hud.best_label.position.y + 6.0, "레벨 글자 아래 끝(%f)이 최고 글자 위(%f) 바로 위에 이어진다" % [level_bottom, hud.best_label.position.y])
+	assert(best_bottom <= hud.info_label.position.y + 2.0, "최고 글자 아래 끝(%f)이 빌드 문구 위(%f)보다 위에 있다" % [best_bottom, hud.info_label.position.y])
+	assert(hud.bugs_label.position.y >= info_bottom - 4.0, "남은 벌레(위 %f)는 빌드 문구(아래 끝 %f) 아래" % [hud.bugs_label.position.y, info_bottom])
+	assert(hud.menu_button.position.y >= bugs_bottom - 4.0, "메뉴 버튼(위 %f)은 남은 벌레(아래 끝 %f) 아래" % [hud.menu_button.position.y, bugs_bottom])
 	hud.queue_free()
