@@ -18,6 +18,7 @@ var state := State.WAITING
 var alpha := 0.0              # 머리가 지금 칸을 지난 비율. 0 = 입구 면, 1 = 출구 면
 var speed := Tuning.SPEED_START
 var score := 0
+var elapsed := 0.0            # 실행 중(맵 회전 중 제외)에 흐른 시간(초). 타임어택 기록이 쓴다
 var queue: Array[int] = []    # 아직 적용 안 된 조향 입력(Worm.Steer). 칸 경계마다 하나씩 꺼내 쓴다
 var paused := false           # 맵 회전 중이면 밖에서 켠다
 var just_grew := false        # 이번 걸음에 꼬리가 자랐는가(새 꼬리가 부풀어 오르는 연출용)
@@ -89,6 +90,7 @@ func advance(delta: float) -> void:
 		return
 	if state != State.RUNNING or paused:
 		return
+	elapsed += delta
 	alpha += minf(speed * delta, Tuning.MAX_STEP_PER_FRAME)
 	# 다음 칸이 막혔으면 머리 앞면이 그 면에 닿는 순간 멈춘다. 몸 칸은 걸음 이벤트에서만 바뀌므로
 	# 여기서 보나 걸음 이벤트에서 보나 결과가 같다(출구는 칸에 들어설 때 이미 정해졌다).

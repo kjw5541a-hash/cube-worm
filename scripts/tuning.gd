@@ -15,6 +15,12 @@ const MAX_STEP_PER_FRAME := 1.0 / 3.0       # 한 프레임에 머리가 나아�
 
 const LEVEL_MAX := 8                       # 레벨 N 의 맵 높이는 N 칸. 8 레벨이 정육면체(BOX 칸)다
 const CLEAR_DELAY := 0.8                    # 클리어 뒤 다음 레벨 입력을 받기까지(초)
+# 타임어택: 레벨 TIME_LEVEL 한 판을 고정 배치(시드가 같으면 바위·벌레 배치가 늘 같다)로 한다.
+const TIME_LEVEL := 8
+# 시드 1 이 조건(모든 벌레가 바위를 거치지 않고 닿는다, 벌레가 서로 다른 층 5개 이상)을 처음 만족해서 골랐다(7개 층).
+const TIME_SEED := 1
+# 판 생성 규칙(Field·Game 의 배치 코드)을 일부러 바꾸면 올린다. 시간 기록은 이 값이 같은 판끼리만 비교한다.
+const TIME_LAYOUT_VERSION := 1
 const BUG_COUNT := 3                        # 벌레 종류 수. 종류마다 한 마리씩 항상 있다(= BUG_SCORES.size())
 const BUG_SCORES: Array[int] = [1, 2, 3]    # 종류별 점수: 크림·더듬이·반딧불. 성장과 속도 상승은 종류와 무관하다
 const ROCK_COUNT := 8

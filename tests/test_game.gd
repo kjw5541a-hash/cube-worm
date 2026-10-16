@@ -32,6 +32,7 @@ func _initialize() -> void:
 	_test_progress_and_eat_marks()
 	_test_speed_cap()
 	_test_paused_freezes()
+	_test_elapsed()
 	_test_new_game_layout()
 	_test_bugs_stay_valid_in_random_play()
 	_test_perf_worm()
@@ -389,3 +390,37 @@ func _test_one_floor_ignores_vertical() -> void:
 			break
 	assert(g.worm.head().y == 0, "1층에서는 높이가 바뀌지 않는다")
 
+
+# 타임어택 시계: 실행 중에만 흐르고(맵 회전 중 제외), 클리어·죽음 뒤에는 멈춘다.
+func _test_elapsed() -> void:
+	var g := _clean()
+	assert(g.elapsed == 0.0, "새 판의 시계는 0")
+	g.advance(0.5)
+	assert(g.elapsed == 0.0, "출발 전(대기 중)에는 시계가 서 있다")
+	_go(g, -X)
+	g.advance(0.1)
+	g.advance(0.2)
+	assert(is_equal_approx(g.elapsed, 0.3), "실행 중에는 프레임 시간이 쌓인다: %f" % g.elapsed)
+	g.paused = true
+	g.advance(0.5)
+	assert(is_equal_approx(g.elapsed, 0.3), "맵이 도는 동안(paused)에는 멈춘다")
+	g.paused = false
+	g.advance(0.1)
+	assert(is_equal_approx(g.elapsed, 0.4), "회전이 끝나면 다시 흐른다")
+	var c := _clean()
+	_bugs(c, [[Vector3i(3, 4, 4), 0]])
+	_go(c, -X)
+	_one_step(c)
+	assert(c.state == Game.State.CLEARED, "마지막 벌레를 먹으면 클리어")
+	var at_clear := c.elapsed
+	assert(at_clear > 0.0, "클리어까지 시간이 흘렀다")
+	for i in 60:
+		c.advance(FRAME)
+	assert(c.elapsed == at_clear, "클리어 뒤에는 시계가 멈춘다")
+	var d := _clean(Vector3i(0, 4, 4))
+	_go(d, -X)
+	_one_step(d)
+	assert(d.state == Game.State.DEAD, "벽에 부딪혀 죽었다")
+	var at_death := d.elapsed
+	d.advance(1.0)
+	assert(d.elapsed == at_death, "죽은 뒤에는 시계가 멈춘다")

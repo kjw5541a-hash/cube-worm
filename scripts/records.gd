@@ -40,3 +40,7 @@ static func time_result_text(ms: int, verdict: int, best_ms: int) -> String:
 			lines.append("최고 %s초" % format_time(best_ms, 2))
 	lines.append("탭하면 다시 도전")
 	return "\n".join(lines)
+
+# 타임어택 판 배치 이름. 레벨·시드·생성 규칙 버전이 바뀌면 달라져, 옛 시간 기록은 다른 판의 기록으로 숨겨진다.
+static func time_layout() -> String:
+	return "%d-%d-%d" % [Tuning.TIME_LEVEL, Tuning.TIME_SEED, Tuning.TIME_LAYOUT_VERSION]
