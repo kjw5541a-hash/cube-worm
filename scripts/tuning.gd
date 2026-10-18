@@ -26,6 +26,13 @@ const ROCK_COUNT := 8
 const ROCK_CLEAR_RADIUS := 2                # 시작 지렁이 칸에서 이 체비쇼프 거리 안에는 바위 없음
 const QUEUE_MAX := 2
 
+# 콤보와 황금 벌레(기존 방식의 점수). 둘 다 실행 중(맵 회전 중 제외)에만 시간이 흐른다.
+const COMBO_WINDOW := 3.0                   # 벌레를 먹고 이 시간(초) 안에 다음 벌레를 먹으면 연속
+const COMBO_MAX := 5                        # 연속 수(= 점수 배율)의 상한
+const GOLD_AT := 3                          # 연속 수가 이 값이 되는 순간 황금 벌레가 나온다
+const GOLD_TIME := 5.0                      # 황금 벌레가 머무는 시간(초)
+const GOLD_SCORE := 5                       # 황금 벌레의 기본 점수(연속 수를 곱한다)
+
 const TURN_TIME := 0.3                      # 맵 회전 시간(초)
 const DEATH_DELAY := 1.0                    # 죽고 나서 다시 시작을 받기까지(초)
 const PERF_LENGTH := 500                    # ?perf 로 시작할 때 몸 길이

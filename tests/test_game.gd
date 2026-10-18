@@ -33,6 +33,11 @@ func _initialize() -> void:
 	_test_speed_cap()
 	_test_paused_freezes()
 	_test_elapsed()
+	_test_combo_multiplies()
+	_test_combo_timer()
+	_test_gold_appears()
+	_test_gold_eat()
+	_test_gold_limits()
 	_test_new_game_layout()
 	_test_bugs_stay_valid_in_random_play()
 	_test_perf_worm()
@@ -371,7 +376,7 @@ func _test_clear() -> void:
 	assert(g.state == Game.State.RUNNING and fired[0] == 0, "벌레가 남아 있으면 계속")
 	_one_step(g)
 	assert(g.state == Game.State.CLEARED and fired[0] == 1, "전부 먹으면 클리어 신호 한 번")
-	assert(g.score == Tuning.BUG_SCORES[0] + Tuning.BUG_SCORES[1], "점수는 종류별 그대로")
+	assert(g.score == Tuning.BUG_SCORES[0] + Tuning.BUG_SCORES[1] * 2, "점수는 종류별 점수 × 연속 수(둘째는 ×2)")
 	var head := g.worm.head()
 	for i in 200:
 		g.advance(FRAME)
@@ -424,3 +429,169 @@ func _test_elapsed() -> void:
 	var at_death := d.elapsed
 	d.advance(1.0)
 	assert(d.elapsed == at_death, "죽은 뒤에는 시계가 멈춘다")
+
+# 콤보: COMBO_WINDOW 안에 이어 먹으면 연속 수가 오르고, 점수는 벌레 점수 × 연속 수다. 연속 수는 COMBO_MAX 에서 멈춘다.
+func _test_combo_multiplies() -> void:
+	var g := _clean()
+	_bugs(g, [[Vector3i(3, 4, 4), 0], [Vector3i(2, 4, 4), 1], [Vector3i(1, 4, 4), 2], [Vector3i(7, 7, 7), 0]])
+	var got := []
+	g.ate.connect(func(_kind: int, points: int, _cell: Vector3i) -> void: got.append(points))
+	assert(g.combo == 0 and g.combo_left == 0.0, "새 판에는 콤보가 없다")
+	_go(g, -X)
+	_one_step(g)
+	assert(g.combo == 1 and is_equal_approx(g.combo_left, Tuning.COMBO_WINDOW), "첫 벌레: 연속 1, 시간이 꽉 찬다")
+	_one_step(g)
+	_one_step(g)
+	assert(g.combo == 3, "이어 먹으면 연속 수가 오른다: %d" % g.combo)
+	assert(got == [1, 4, 9], "점수 = 벌레 점수(1·2·3) × 연속 수(1·2·3): %s" % [got])
+	assert(g.score == 14, "크림→더듬이→반딧불 순서로 이어 먹으면 14점: %d" % g.score)
+	var m := _clean()
+	_bugs(m, [[Vector3i(3, 4, 4), 2], [Vector3i(7, 7, 7), 0]])
+	m.combo = Tuning.COMBO_MAX
+	m.combo_left = Tuning.COMBO_WINDOW
+	_go(m, -X)
+	_one_step(m)
+	assert(m.combo == Tuning.COMBO_MAX and m.score == Tuning.BUG_SCORES[2] * Tuning.COMBO_MAX, "연속 수와 배율은 COMBO_MAX 에서 멈춘다: %d" % m.score)
+
+# 콤보 시간은 실행 중에만 흐른다: 대기 중·맵 회전 중(paused)에는 서 있고, 다하면 연속 수가 0 이 되어 다음 벌레는 1부터 센다.
+func _test_combo_timer() -> void:
+	var g := _clean()
+	_bugs(g, [[Vector3i(3, 4, 4), 0], [Vector3i(1, 4, 4), 2], [Vector3i(7, 7, 7), 0]])
+	_go(g, -X)
+	_one_step(g)
+	assert(g.combo == 1, "첫 벌레")
+	g.paused = true
+	g.advance(2.0)
+	assert(g.combo == 1 and is_equal_approx(g.combo_left, Tuning.COMBO_WINDOW), "맵이 도는 동안(paused)에는 콤보 시간이 멈춘다")
+	g.paused = false
+	g.advance(2.9)
+	assert(g.combo == 1 and is_equal_approx(g.combo_left, Tuning.COMBO_WINDOW - 2.9), "시간이 줄어도 남아 있는 동안 연속 수는 그대로: %f" % g.combo_left)
+	g.advance(0.2)
+	assert(g.combo == 0 and g.combo_left == 0.0, "시간이 다하면 콤보가 끊긴다")
+	_one_step(g)
+	_one_step(g)
+	assert(g.combo == 1 and g.score == 1 + Tuning.BUG_SCORES[2], "끊긴 뒤 먹으면 다시 연속 1(×1): 점수 %d" % g.score)
+	var w := _clean()
+	w.combo = 2
+	w.combo_left = 1.0
+	w.advance(0.5)
+	assert(w.combo_left == 1.0, "출발 전(대기 중)에는 시간이 흐르지 않는다")
+
+# 황금 벌레: golden 판에서 연속 수가 GOLD_AT 이 되는 순간 빈 칸 하나에 나온다. 같은 시드면 같은 칸이고, GOLD_TIME 뒤 사라진다.
+func _test_gold_appears() -> void:
+	var row := [[Vector3i(3, 4, 4), 0], [Vector3i(2, 4, 4), 1], [Vector3i(1, 4, 4), 2], [Vector3i(7, 7, 7), 0]]
+	var off := _clean()
+	_bugs(off, row)
+	_go(off, -X)
+	for i in 3:
+		_one_step(off)
+	assert(off.combo == Tuning.GOLD_AT and off.gold_left == 0.0, "golden 이 꺼진 판에는 황금 벌레가 없다")
+	var g := _clean()
+	g.golden = true
+	_bugs(g, row)
+	var events := []
+	g.ate.connect(func(_kind: int, _points: int, _cell: Vector3i) -> void: events.append("ate"))
+	g.gold_appeared.connect(func(cell: Vector3i) -> void: events.append(cell))
+	_go(g, -X)
+	_one_step(g)
+	_one_step(g)
+	assert(events == ["ate", "ate"] and g.gold_left == 0.0, "연속 %d 이 되기 전에는 나오지 않는다" % Tuning.GOLD_AT)
+	_one_step(g)
+	assert(events.size() == 4 and events[2] == "ate" and events[3] == g.gold_cell, "연속 %d 이 되면 ate 신호 다음에 한 번 나온다: %s" % [Tuning.GOLD_AT, events])
+	assert(g.gold_left == Tuning.GOLD_TIME, "GOLD_TIME 동안 머문다")
+	var c := g.gold_cell
+	assert(g.field.in_bounds(c) and not g.field.has_rock(c) and not g.field.has_bug(c) and not g.worm.cell_set().has(c), "빈 칸에 나온다: %s" % [c])
+	assert(g.field.bugs.size() == 1, "황금 벌레는 field.bugs 에 넣지 않는다")
+	var same := _clean()
+	same.golden = true
+	_bugs(same, row)
+	_go(same, -X)
+	for i in 3:
+		_one_step(same)
+	assert(same.gold_cell == c, "같은 시드면 같은 칸에 나온다")
+	g.advance(Tuning.GOLD_TIME - 0.1)
+	assert(is_equal_approx(g.gold_left, 0.1), "황금 벌레 시간이 줄어든다: %f" % g.gold_left)
+	g.paused = true
+	g.advance(1.0)
+	assert(is_equal_approx(g.gold_left, 0.1), "맵이 도는 동안에는 시간이 멈춘다")
+	g.paused = false
+	g.advance(0.2)
+	assert(g.gold_left == 0.0, "GOLD_TIME 이 지나면 사라진다")
+
+# 황금 벌레를 먹으면 GOLD_SCORE × 연속 수, 일반 벌레처럼 자라고 빨라지고 콤보가 이어진다. 클리어 조건에는 세지 않는다.
+func _test_gold_eat() -> void:
+	var g := _clean()
+	_bugs(g, [[Vector3i(7, 7, 7), 0]])
+	g.gold_cell = Vector3i(3, 4, 4)
+	g.gold_left = Tuning.GOLD_TIME
+	g.combo = 3
+	g.combo_left = Tuning.COMBO_WINDOW
+	var got := []
+	g.ate.connect(func(kind: int, points: int, cell: Vector3i) -> void: got.append([kind, points, cell]))
+	_go(g, -X)
+	_one_step(g)
+	assert(got == [[Game.GOLD, Tuning.GOLD_SCORE * 4, Vector3i(3, 4, 4)]], "황금 벌레는 연속 4번째라 ×4: %s" % [got])
+	assert(g.score == Tuning.GOLD_SCORE * 4 and g.combo == 4 and g.gold_left == 0.0, "점수가 오르고 콤보가 이어지고 황금 벌레가 사라진다")
+	assert(g.worm.length() == 4 and g.just_grew, "한 마디 자란다")
+	assert(is_equal_approx(g.speed, Tuning.SPEED_START + Tuning.SPEED_STEP), "속도도 오른다")
+	assert(g.eaten_kind == Game.GOLD and g.eaten_cell == Vector3i(3, 4, 4), "먹은 연출 기록")
+	assert(g.state == Game.State.RUNNING and g.field.bugs.size() == 1, "클리어 조건에는 세지 않는다")
+	var late := _clean()
+	_bugs(late, [[Vector3i(7, 7, 7), 0]])
+	late.gold_cell = Vector3i(3, 4, 4)
+	late.gold_left = Tuning.GOLD_TIME
+	_go(late, -X)
+	_one_step(late)
+	assert(late.score == Tuning.GOLD_SCORE and late.combo == 1, "콤보가 끊긴 뒤에 먹으면 ×1: %d" % late.score)
+
+# 황금 벌레가 못 나오는 때와 사라지는 때: 앞의 황금 벌레가 남아 있을 때, 빈 칸이 없을 때(오류 없이),
+# 연속 수를 만든 벌레가 마지막일 때. 클리어하면 남은 황금 벌레도 사라지고, 죽으면 그 자리에 남는다.
+func _test_gold_limits() -> void:
+	var row := [[Vector3i(3, 4, 4), 0], [Vector3i(7, 7, 7), 0]]
+	var fired := [0]
+	var busy := _clean()
+	busy.golden = true
+	_bugs(busy, row)
+	busy.gold_cell = Vector3i(6, 6, 6)
+	busy.gold_left = 4.0
+	busy.combo = Tuning.GOLD_AT - 1
+	busy.combo_left = Tuning.COMBO_WINDOW
+	busy.gold_appeared.connect(func(_cell: Vector3i) -> void: fired[0] += 1)
+	_go(busy, -X)
+	_one_step(busy)
+	assert(busy.combo == Tuning.GOLD_AT and fired[0] == 0 and busy.gold_cell == Vector3i(6, 6, 6), "앞의 황금 벌레가 남아 있으면 하나 더 나오지 않는다")
+	var full := _clean()
+	full.golden = true
+	_bugs(full, row)
+	for cell in full.field.empty_cells(full.worm.cell_set()):
+		full.field.rocks[cell] = true
+	full.combo = Tuning.GOLD_AT - 1
+	full.combo_left = Tuning.COMBO_WINDOW
+	full.gold_appeared.connect(func(_cell: Vector3i) -> void: fired[0] += 1)
+	_go(full, -X)
+	_one_step(full)
+	assert(full.combo == Tuning.GOLD_AT and full.gold_left == 0.0 and fired[0] == 0, "빈 칸이 없으면 오류 없이 나오지 않는다")
+	var last := _clean()
+	last.golden = true
+	_bugs(last, [[Vector3i(3, 4, 4), 0], [Vector3i(2, 4, 4), 1], [Vector3i(1, 4, 4), 2]])
+	last.gold_appeared.connect(func(_cell: Vector3i) -> void: fired[0] += 1)
+	_go(last, -X)
+	for i in 3:
+		_one_step(last)
+	assert(last.state == Game.State.CLEARED and last.combo == Tuning.GOLD_AT and fired[0] == 0 and last.gold_left == 0.0, "연속 수를 만든 벌레가 마지막이면 클리어이고 황금 벌레는 나오지 않는다")
+	var rest := _clean()
+	_bugs(rest, [[Vector3i(3, 4, 4), 0]])
+	rest.gold_cell = Vector3i(6, 6, 6)
+	rest.gold_left = 4.0
+	_go(rest, -X)
+	_one_step(rest)
+	assert(rest.state == Game.State.CLEARED and rest.gold_left == 0.0, "클리어하면 남은 황금 벌레도 사라진다")
+	var dead := _clean(Vector3i(0, 4, 4))
+	dead.gold_cell = Vector3i(6, 6, 6)
+	dead.gold_left = 4.0
+	_go(dead, -X)
+	_one_step(dead)
+	assert(dead.state == Game.State.DEAD, "벽에 부딪혀 죽었다")
+	var left := dead.gold_left
+	dead.advance(1.0)
+	assert(dead.gold_left == left and dead.gold_cell == Vector3i(6, 6, 6), "죽은 뒤에는 시간이 서고 황금 벌레는 그 자리에 남는다")

@@ -1,14 +1,19 @@
 class_name Game
 extends RefCounted
 
-# 규칙 전부: 입력 큐, 진행률, 걸음, 먹기, 죽음. 노드를 쓰지 않아 헤드리스로 검사한다.
+# 규칙 전부: 입력 큐, 진행률, 걸음, 먹기(콤보·황금 벌레), 죽음. 노드를 쓰지 않아 헤드리스로 검사한다.
 
 enum State { WAITING, RUNNING, DEAD, CLEARED }
 
-# 벌레를 먹은 순간(걸음 이벤트 안). 종류, 얻은 점수, 먹은 칸.
+# 황금 벌레의 종류 번호: 일반 종류(0 ~ BUG_COUNT-1) 다음 번호다. ate 신호의 kind 로 온다.
+const GOLD := Tuning.BUG_COUNT
+
+# 벌레를 먹은 순간(걸음 이벤트 안). 종류, 얻은 점수(연속 배율을 곱한 값), 먹은 칸.
 signal ate(kind: int, points: int, cell: Vector3i)
-# 판의 벌레를 전부 먹었다.
+# 판의 일반 벌레를 전부 먹었다(황금 벌레는 세지 않는다).
 signal cleared
+# 황금 벌레가 나타났다(같은 걸음의 ate 신호 다음). 나타난 칸.
+signal gold_appeared(cell: Vector3i)
 
 var level := Tuning.LEVEL_MAX
 var height := Tuning.BOX
@@ -26,6 +31,11 @@ var steps := 0                # 지금까지 넘은 칸 수(걸음 이벤트 횟
 var eat_steps: Array[int] = []  # 벌레를 먹은 걸음 번호. 먹은 덩어리가 몸을 따라 흐르는 연출이 쓴다(꼬리를 지나면 버린다)
 var eaten_cell := Vector3i.ZERO # 가장 최근에 먹은 벌레의 칸
 var eaten_kind := -1            # 가장 최근에 먹은 벌레의 종류
+var golden := false             # 황금 벌레를 쓰는 판인가(기존 방식 판만 Main 이 켠다)
+var combo := 0                  # 이어지는 연속 먹기 수(0 = 없음). 연속 n 번째로 먹은 벌레의 점수 배율이 n 이다
+var combo_left := 0.0           # 콤보를 이을 수 있는 남은 시간(초). 0 이 되면 combo 도 0
+var gold_cell := Vector3i.ZERO  # 황금 벌레의 칸(gold_left > 0 일 때만 뜻이 있다). field.bugs 에는 넣지 않는다
+var gold_left := 0.0            # 황금 벌레가 사라지기까지 남은 시간(초). 0 = 없음
 
 # 레벨 N 의 맵 높이 = N 칸(최대 LEVEL_MAX).
 static func height_of(lv: int) -> int:
@@ -91,6 +101,7 @@ func advance(delta: float) -> void:
 	if state != State.RUNNING or paused:
 		return
 	elapsed += delta
+	_tick_timers(delta)
 	alpha += minf(speed * delta, Tuning.MAX_STEP_PER_FRAME)
 	# 다음 칸이 막혔으면 머리 앞면이 그 면에 닿는 순간 멈춘다. 몸 칸은 걸음 이벤트에서만 바뀌므로
 	# 여기서 보나 걸음 이벤트에서 보나 결과가 같다(출구는 칸에 들어설 때 이미 정해졌다).
@@ -116,13 +127,21 @@ func _step() -> void:
 	steps += 1
 	while not eat_steps.is_empty() and steps - eat_steps[0] > worm.length() + 2:
 		eat_steps.pop_front()
-	just_grew = field.has_bug(next)
+	var at_gold := gold_left > 0.0 and next == gold_cell
+	just_grew = at_gold or field.has_bug(next)
 	var kind := -1
 	var points := 0
 	if just_grew:
-		kind = field.kind_at(next)
-		points = Tuning.BUG_SCORES[kind]
-		field.remove_bug(next)
+		kind = GOLD if at_gold else field.kind_at(next)
+		# 콤보: 시간이 남아 있으면 연속 수가 오르고, 아니면 1부터 다시 센다. 점수는 기본 점수 × 연속 수.
+		combo = mini(combo + 1, Tuning.COMBO_MAX) if combo_left > 0.0 else 1
+		combo_left = Tuning.COMBO_WINDOW
+		if at_gold:
+			points = Tuning.GOLD_SCORE * combo
+			gold_left = 0.0
+		else:
+			points = Tuning.BUG_SCORES[kind] * combo
+			field.remove_bug(next)
 		score += points
 		speed = minf(speed + Tuning.SPEED_STEP, Tuning.SPEED_MAX)
 		eat_steps.append(steps)
@@ -132,7 +151,29 @@ func _step() -> void:
 	if just_grew:
 		ate.emit(kind, points, next)
 		if field.bugs.is_empty():
+			gold_left = 0.0
 			state = State.CLEARED
 			cleared.emit()
+		elif golden and combo == Tuning.GOLD_AT and gold_left == 0.0:
+			_spawn_gold()
 	# 새 칸의 출구: 큐의 입력을 이 칸으로 들어온 방향(entries[0])과 윗면 기준(refs[0])에서 꺾은 방향, 없으면 직진.
 	worm.head_exit = Worm.turned(queue.pop_front(), worm.entries[0], worm.refs[0]) if not queue.is_empty() else worm.entries[0]
+
+# 콤보와 황금 벌레의 남은 시간을 줄인다(실행 중이고 맵 회전 중이 아닐 때만 부른다).
+# 콤보 시간이 다하면 연속 수가 0 이 되고, 황금 벌레 시간이 다하면 황금 벌레가 사라진다.
+func _tick_timers(delta: float) -> void:
+	if combo_left > 0.0:
+		combo_left = maxf(combo_left - delta, 0.0)
+		if combo_left == 0.0:
+			combo = 0
+	if gold_left > 0.0:
+		gold_left = maxf(gold_left - delta, 0.0)
+
+# 빈 칸(바위·벌레·지렁이 몸이 없는 칸) 하나에 황금 벌레를 놓는다. 빈 칸이 없으면 놓지 않는다.
+func _spawn_gold() -> void:
+	var free := field.empty_cells(worm.cell_set())
+	if free.is_empty():
+		return
+	gold_cell = free[field.rng.randi_range(0, free.size() - 1)]
+	gold_left = Tuning.GOLD_TIME
+	gold_appeared.emit(gold_cell)
