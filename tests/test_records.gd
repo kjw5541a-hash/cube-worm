@@ -42,7 +42,7 @@ func _test_time_result_text() -> void:
 	assert(Records.time_result_text(41800, Records.Verdict.NEW_BEST, 41800) == "클리어!\n41.80초\n신기록!\n탭하면 다시 도전", "신기록 문구")
 	assert(Records.time_result_text(50000, Records.Verdict.NONE, 41800) == "클리어!\n50.00초\n최고 41.80초\n탭하면 다시 도전", "기록을 못 깼으면 최고 시간을 보인다")
 
-# 판 배치 이름은 레벨-시드-규칙버전이다. 바뀌면 옛 시간 기록은 다른 판의 기록이라 숨겨진다.
-# 일부러 바꿀 때는 이 테스트와 test_time_layout.gd 의 스냅샷을 같이 고친다.
+# 판 배치 이름은 레벨-규칙버전이다. 바뀌면 옛 시간 기록은 다른 판의 기록이라 숨겨진다.
+# 고정 시드 배치 시절 이름은 "8-1-1" 이었다. 무작위 배치(버전 2)에서 낸 기록과 섞이지 않는다.
 func _test_time_layout() -> void:
-	assert(Records.time_layout() == "8-1-1", "판 배치 이름: %s" % Records.time_layout())
+	assert(Records.time_layout() == "8-2", "판 배치 이름: %s" % Records.time_layout())

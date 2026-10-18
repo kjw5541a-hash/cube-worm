@@ -80,7 +80,7 @@ func start_mode(m: int, start_level := start_level_requested(), perf := perf_req
 
 func new_game() -> void:
 	if mode == Title.Mode.TIME_ATTACK:
-		game = Game.new(Tuning.TIME_SEED, false, Tuning.TIME_LEVEL)  # 늘 같은 배치
+		game = Game.new(randi(), false, Tuning.TIME_LEVEL)  # 시도마다 새 배치
 	else:
 		game = Game.new(randi(), perf_requested(), level)
 	game.score = base_score
@@ -198,7 +198,7 @@ func _restart_if_ready() -> void:
 			if mode == Title.Mode.CLASSIC:
 				base_score = game.score  # 클리어한 점수는 이어진다
 				level = mini(level + 1, Tuning.LEVEL_MAX)
-			new_game()  # 타임어택은 같은 판을 다시 한다
+			new_game()  # 타임어택은 다음 레벨로 가지 않는다(배치는 새로 놓는다)
 	elif _dead_time >= Tuning.DEATH_DELAY:
 		new_game()
 

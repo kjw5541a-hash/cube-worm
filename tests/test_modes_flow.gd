@@ -20,7 +20,7 @@ func _initialize() -> void:
 	_test_classic_first_record_is_quiet()
 	_test_classic_debug_start_does_not_record()
 	_test_time_attack_setup_and_timer()
-	_test_time_attack_death_retries_same_layout()
+	_test_time_attack_death_retries_new_layout()
 	_test_time_attack_clear_records()
 	_test_game_stops_while_title_is_open()
 	_test_menu_flow()
@@ -97,9 +97,7 @@ func _test_time_attack_setup_and_timer() -> void:
 	_reset()
 	_main.start_mode(Title.Mode.TIME_ATTACK, 5, true)  # 확인용 주소 값이 와도 무시한다
 	var g: Game = _main.game
-	var ref := Game.new(Tuning.TIME_SEED, false, Tuning.TIME_LEVEL)
 	assert(_main.mode == Title.Mode.TIME_ATTACK and _main.level == Tuning.TIME_LEVEL and g.height == Tuning.TIME_LEVEL, "타임어택은 레벨 8 판이다(확인용 주소는 무시)")
-	assert(g.field.bugs == ref.field.bugs and g.field.rocks == ref.field.rocks, "고정 시드 배치다")
 	assert(_main._record_enabled, "타임어택은 늘 기록한다")
 	assert(_main.hud.timer_label.visible and _main.hud.bugs_label.visible and not _main.hud.score_label.visible, "타이머와 남은 벌레를 보이고 점수는 숨긴다")
 	assert(_main.hud.level_label.text == "타임어택" and _main.hud.best_label.text == "최고 --", "가운데 글자")
@@ -110,8 +108,8 @@ func _test_time_attack_setup_and_timer() -> void:
 	_main._process(0.3)
 	assert(is_equal_approx(g.elapsed, 0.3) and _main.hud.timer_label.text == "0.3", "출발하면 타이머가 흐른다: %f" % g.elapsed)
 
-# 죽으면 그 시도는 끝: 타이머가 멈추고, 탭하면 같은 배치로 처음부터(타이머 0). 죽은 시도는 기록이 되지 않는다.
-func _test_time_attack_death_retries_same_layout() -> void:
+# 죽으면 그 시도는 끝: 타이머가 멈추고, 탭하면 새 배치로 처음부터(타이머 0). 죽은 시도는 기록이 되지 않는다.
+func _test_time_attack_death_retries_new_layout() -> void:
 	_reset()
 	_main.start_mode(Title.Mode.TIME_ATTACK)
 	var g: Game = _main.game
@@ -123,9 +121,9 @@ func _test_time_attack_death_retries_same_layout() -> void:
 	assert(g.elapsed == at_death, "죽으면 타이머가 멈춘다")
 	_main._dead_time = Tuning.DEATH_DELAY + 1.0
 	_main._restart_if_ready()
-	var ref := Game.new(Tuning.TIME_SEED, false, Tuning.TIME_LEVEL)
 	assert(_main.game != g and _main.game.elapsed == 0.0 and _main.game.state == Game.State.WAITING, "탭하면 새 판, 타이머는 0")
-	assert(_main.game.field.bugs == ref.field.bugs and _main.game.field.rocks == ref.field.rocks, "같은 배치로 다시 한다")
+	assert(_main.game.field.rocks != g.field.rocks, "바위를 새로 놓는다")
+	assert(_main.game.field.bugs != g.field.bugs, "벌레를 새로 놓는다")
 	assert(SaveData.load_best_time_ms(Records.time_layout()) == 0, "죽은 시도는 기록이 되지 않는다")
 
 func _test_time_attack_clear_records() -> void:
@@ -139,7 +137,7 @@ func _test_time_attack_clear_records() -> void:
 	assert(_main.sfx.last_id == "clear", "클리어 소리")
 	_main._dead_time = Tuning.CLEAR_DELAY + 0.1
 	_main._restart_if_ready()
-	assert(_main.level == Tuning.TIME_LEVEL and _main.game.state == Game.State.WAITING and _main.game.elapsed == 0.0, "클리어 뒤 탭하면 같은 판을 다시 한다(다음 레벨로 가지 않는다)")
+	assert(_main.level == Tuning.TIME_LEVEL and _main.game.state == Game.State.WAITING and _main.game.elapsed == 0.0, "클리어 뒤 탭하면 레벨 8 을 다시 한다(다음 레벨로 가지 않는다)")
 	_clear_with(50.0)
 	assert(SaveData.load_best_time_ms(layout) == 42310 and _main.best_time_ms == 42310, "더 느린 시간은 기록을 바꾸지 않는다")
 	assert(_main.hud.clear_label.text == "클리어!\n50.00초\n최고 42.31초\n탭하면 다시 도전", "느린 기록 문구: %s" % _main.hud.clear_label.text)
