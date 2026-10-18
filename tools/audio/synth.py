@@ -1,4 +1,5 @@
-"""소리를 합성해 assets/audio/*.ogg 로 쓴다. 사용: python3 tools/audio/synth.py"""
+"""소리를 합성해 assets/audio/*.ogg 로 쓴다. 사용: python3 tools/audio/synth.py [소리 이름 ...]
+이름을 주면 그 소리만 쓴다(다른 .ogg 는 건드리지 않는다). 없으면 전부 쓴다."""
 import math, os, random, struct, subprocess, sys, tempfile, wave
 
 SR = 22050
@@ -61,6 +62,14 @@ def bgm():
     bass += [0.0] * (size - len(bass))
     return [m + b for m, b in zip(mel, bass)]
 
+def gold_eat():
+    # 반짝: 높은 두 음이 이어 울린다 + 아주 짧은 쩝
+    return mix(seq([tone(1047, 0.07, 0.45, decay=4), tone(1568, 0.18, 0.5, decay=5)]), noise(0.03, 0.08))
+
+def gold_appear():
+    # 띠링: 빠르게 올라가는 세 음
+    return seq([tone(784, 0.07, 0.4, "tri", decay=3), tone(988, 0.07, 0.4, "tri", decay=3), tone(1319, 0.22, 0.45, "tri", decay=3)])
+
 SOUNDS = {
     "eat_0": eat(392),
     "eat_1": eat(523),
@@ -76,6 +85,9 @@ SOUNDS = {
     "start": tone(440, 0.12, 0.4, f_end=880, decay=4),
     "skin": mix(tone(900, 0.04, 0.3, "square", decay=10), noise(0.02, 0.1)),
     "bgm": bgm(),
+    # 새 소리는 표 끝에 붙인다: 앞 소리들이 쓰는 노이즈 순서(random.seed(7))가 바뀌지 않는다
+    "eat_3": gold_eat(),
+    "gold": gold_appear(),
 }
 
 def write_wav(path, samples):
@@ -90,13 +102,14 @@ def main():
     out_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "assets", "audio")
     os.makedirs(out_dir, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
-        for name, samples in SOUNDS.items():
+        for name in sys.argv[1:] or SOUNDS:  # 이름을 주면 그 소리만 쓴다
+            samples = SOUNDS[name]
             wav = os.path.join(tmp, name + ".wav")
             write_wav(wav, samples)
             # ffmpeg 내장 vorbis 인코더는 실험 단계라 -strict -2 가 필요하다.
             subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", wav, "-c:a", "vorbis", "-strict", "-2",
                             "-ac", "2", os.path.join(out_dir, name + ".ogg")], check=True)
-    print("ok:", ", ".join(SOUNDS))
+    print("ok:", ", ".join(sys.argv[1:] or SOUNDS))
 
 if __name__ == "__main__":
     sys.exit(main())

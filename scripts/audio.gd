@@ -6,11 +6,9 @@ extends Node
 # BGM 은 호출하는 쪽이 첫 입력에서 start_music() 을 부른다.
 
 const DIR := "res://assets/audio/"
-const NAMES: Array[String] = ["eat_0", "eat_1", "eat_2", "turn", "up", "down", "rotate", "die", "clear", "start", "skin"]
+const NAMES: Array[String] = ["eat_0", "eat_1", "eat_2", "eat_3", "turn", "up", "down", "rotate", "die", "clear", "start", "skin", "gold"]
 const MUSIC := "bgm"
 const POOL := 6                # 한꺼번에 겹쳐 울릴 수 있는 효과음 수
-const COMBO_WINDOW := 2.0      # 이 시간(초) 안에 이어 먹으면 연속
-const COMBO_MAX := 4           # 연속 먹기 음 상승의 최대 단계(온음 단위)
 const SFX_DB := -4.0
 const MUSIC_DB := -10.0
 const DUCK_DB := -6.0          # 죽은 뒤 BGM 을 줄이는 양
@@ -27,13 +25,11 @@ var music_starts := 0
 var _streams := {}
 var _pool: Array[AudioStreamPlayer] = []
 var _next := 0
-var _combo := 0
-var _last_eat := -1000.0
 var _music_wanted := false
 
-# 연속 먹기 step 단계의 음높이 배율: 단계마다 반음 두 개(온음)씩 올라간다.
-static func combo_pitch(step: int) -> float:
-	return pow(2.0, 2.0 * clampi(step, 0, COMBO_MAX) / 12.0)
+# 연속 먹기 수 combo 의 음높이 배율: 연속 1번째는 원래 음, 이을 때마다 반음 두 개(온음)씩 올라 Tuning.COMBO_MAX 에서 멈춘다.
+static func combo_pitch(combo: int) -> float:
+	return pow(2.0, 2.0 * (clampi(combo, 1, Tuning.COMBO_MAX) - 1) / 12.0)
 
 # 조향 입력에 어울리는 소리 이름.
 static func steer_id(steer: int) -> String:
@@ -72,14 +68,9 @@ func play(id: String, pitch := 1.0) -> void:
 	last_id = id
 	last_pitch = pitch
 
-# 벌레 종류 kind 를 먹는 소리. 2초 안에 이어 먹으면 한 단계씩 높아진다. now 는 테스트가 시간을 바꿔 끼우려고 둔 값이다.
-func play_eat(kind: int, now := Time.get_ticks_msec() / 1000.0) -> void:
-	if now - _last_eat <= COMBO_WINDOW:
-		_combo = mini(_combo + 1, COMBO_MAX)
-	else:
-		_combo = 0
-	_last_eat = now
-	play("eat_%d" % kind, combo_pitch(_combo))
+# 벌레 종류 kind 를 먹는 소리. combo 는 게임이 센 연속 먹기 수라서, 화면의 점수 배율과 음이 같이 올라간다.
+func play_eat(kind: int, combo: int) -> void:
+	play("eat_%d" % kind, combo_pitch(combo))
 
 func start_music() -> void:
 	_music_wanted = true

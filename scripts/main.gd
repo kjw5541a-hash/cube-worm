@@ -149,7 +149,7 @@ func _on_skin_changed(index: int) -> void:
 
 # 벌레를 먹으면 먹은 칸 위에 점수가 떠오른다. 색은 벌레 종류 색이다.
 func _on_ate(kind: int, points: int, cell: Vector3i) -> void:
-	sfx.play_eat(kind)
+	sfx.play_eat(kind, game.combo)
 	var at := rig.camera.unproject_position(WormPath.center(cell)) - Vector2(0, 40)
 	hud.pop("+%d" % points, at, Skins.BUGS[kind]["color"])
 	if mode == Title.Mode.CLASSIC:
