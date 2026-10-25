@@ -1,7 +1,7 @@
 class_name Hud
 extends CanvasLayer
 
-# 위쪽: 점수(타임어택은 타이머), 빌드 버전과 fps, 가운데 레벨·최고 기록, 소리·맵 회전 버튼. 죽은 뒤에는 다시 시작 안내.
+# 위쪽: 점수(타임어택은 타이머), 빌드 버전과 fps, 가운데 레벨·최고 기록, 소리·맵 회전 버튼. 기존 방식은 점수 아래에 콤보 줄. 죽은 뒤에는 다시 시작 안내.
 # 왼쪽 위 메뉴 버튼은 방식 선택 화면으로 돌아간다.
 
 signal turn_pressed(dir: int)
@@ -12,6 +12,7 @@ signal menu_pressed
 const HEADER_X := 190.0
 const HEADER_W := 180.0
 const CLEAR_TEXT := "레벨 클리어!\n탭하면 다음 레벨"
+const COMBO_BAR_W := 120.0   # 콤보 막대가 꽉 찼을 때의 폭
 
 var score_label := Label.new()
 var info_label := Label.new()
@@ -22,6 +23,8 @@ var sound_button := SoundButton.new()
 var timer_label := Label.new()   # 타임어택 타이머(점수 자리)
 var best_label := Label.new()    # 레벨 글자 아래 최고 기록
 var bugs_label := Label.new()    # 타임어택 남은 벌레
+var combo_label := Label.new()   # 기존 방식: 다음 벌레에 붙을 배율 ×N
+var combo_bar := ColorRect.new() # 남은 콤보 시간(폭이 줄어든다)
 var menu_button := HomeButton.new()
 var _version := str(ProjectSettings.get_setting("application/config/version", "dev"))
 
@@ -59,6 +62,17 @@ func _ready() -> void:
 	bugs_label.add_theme_font_size_override("font_size", 24)
 	bugs_label.visible = false
 	add_child(bugs_label)
+	combo_label.position = Vector2(24, 112)  # 타임어택의 남은 벌레와 같은 자리: 두 방식이 나눠 쓴다
+	combo_label.add_theme_font_size_override("font_size", 28)
+	combo_label.add_theme_color_override("font_color", Skins.GOLD["color"])
+	combo_label.visible = false
+	add_child(combo_label)
+	combo_bar.position = Vector2(80, 124)  # 글자 오른쪽, 세로로는 글자 가운데
+	combo_bar.size = Vector2(COMBO_BAR_W, 12)
+	combo_bar.color = Skins.GOLD["color"]
+	combo_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE  # 막대 위를 눌러도 게임 입력을 막지 않는다
+	combo_bar.visible = false
+	add_child(combo_bar)
 	clear_label.text = CLEAR_TEXT
 	clear_label.add_theme_font_size_override("font_size", 44)
 	clear_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -98,6 +112,7 @@ func set_clear_text(text: String) -> void:
 
 # 방식별 표시: 기존 방식은 점수, 타임어택은 타이머와 남은 벌레.
 func set_mode(mode: int) -> void:
+	set_combo(1, 0.0)  # 방식을 바꿀 때마다 콤보 줄은 숨긴 채로 시작한다
 	var time_attack := mode == Title.Mode.TIME_ATTACK
 	score_label.visible = not time_attack
 	timer_label.visible = time_attack
@@ -113,6 +128,15 @@ func set_timer(seconds: float) -> void:
 
 func set_bugs_left(n: int) -> void:
 	bugs_label.text = "남은 벌레 %d" % n
+
+# 콤보 줄(기존 방식): mult 는 다음 벌레에 붙을 배율, frac 은 남은 콤보 시간의 비율. frac 이 0 이하면 숨긴다.
+func set_combo(mult: int, frac: float) -> void:
+	var on := frac > 0.0
+	combo_label.visible = on
+	combo_bar.visible = on
+	if on:
+		combo_label.text = "×%d" % mult
+		combo_bar.size.x = COMBO_BAR_W * minf(frac, 1.0)
 
 # 기존 방식 최고 점수. 기록이 없으면 --.
 func set_best_score(best: int) -> void:
