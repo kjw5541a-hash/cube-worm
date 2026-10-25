@@ -9,6 +9,7 @@ var field_view := FieldView.new()
 var worm_view := WormView.new()
 var hud := Hud.new()
 var floors := FloorGauge.new()  # 층 눈금(HUD 위에 얹는다)
+var badges := LayerBadges.new()  # 다른 층 벌레의 ▲N·▼N 배지(HUD 맨 아래에 깐다)
 var controller := Controller.new()
 var picker := SkinPicker.new()
 var sfx := Sfx.new()
@@ -44,6 +45,8 @@ func _ready() -> void:
 	add_child(sfx)
 	sfx.muted = SaveData.load_muted()
 	add_child(hud)
+	hud.add_child(badges)
+	hud.move_child(badges, 0)  # 점수·버튼·조향 패드가 배지 위에 온다
 	floors.position = Vector2(24, 845)  # 맨 아래 칸의 왼쪽 아래: 지렁이 선택 줄 바로 위
 	hud.add_child(floors)
 	hud.add_child(controller)
@@ -133,6 +136,7 @@ func _process(delta: float) -> void:
 		var running := game.state == Game.State.RUNNING
 		hud.set_combo(mini(game.combo + 1, Tuning.COMBO_MAX), game.combo_left / Tuning.COMBO_WINDOW if running else 0.0)
 	floors.update_from(game)
+	badges.update_from(game, rig.camera.unproject_position)
 	picker.visible = game.state == Game.State.WAITING  # 시작 전에만 지렁이를 고른다
 	if game.state == Game.State.DEAD:
 		if not _was_dead:
