@@ -19,9 +19,11 @@ func _initialize() -> void:
 	_test_classic_best_score()
 	_test_classic_first_record_is_quiet()
 	_test_classic_debug_start_does_not_record()
+	_test_classic_combo_and_gold()
 	_test_time_attack_setup_and_timer()
 	_test_time_attack_death_retries_new_layout()
 	_test_time_attack_clear_records()
+	_test_time_attack_has_no_gold_or_combo_line()
 	_test_game_stops_while_title_is_open()
 	_test_menu_flow()
 	_test_rotation_pauses_timer()  # 회전 애니메이션이 끝나지 않은 채 남으므로 마지막에 둔다
@@ -92,6 +94,60 @@ func _test_classic_debug_start_does_not_record() -> void:
 	assert(not _main._record_enabled, "?perf 로 시작한 판도 기록하지 않는다")
 	_main.start_mode(Title.Mode.CLASSIC, 1, false)
 	assert(_main._record_enabled, "평소 시작은 기록한다")
+
+# 기존 방식: 황금 벌레를 쓰고, 먹는 소리는 게임의 연속 수를 따르고, 콤보 줄은 달리는 동안만 뜬다.
+func _test_classic_combo_and_gold() -> void:
+	_reset()
+	_main.start_mode(Title.Mode.CLASSIC, 1, false)
+	var g: Game = _main.game
+	assert(g.golden, "기존 방식 판은 황금 벌레를 쓴다")
+	_main._process(0.0)
+	assert(not _main.hud.combo_label.visible, "콤보가 없으면 줄이 숨어 있다")
+	var cell := Vector3i(3, 4, 4)
+	g.combo = 3
+	_main._on_ate(0, 3, cell)
+	assert(_main.sfx.last_id == "eat_0" and is_equal_approx(_main.sfx.last_pitch, Sfx.combo_pitch(3)), "먹는 소리 음높이는 게임의 연속 수를 따른다")
+	var pops := _count("+20")
+	_main._on_ate(Game.GOLD, 20, cell)
+	assert(_main.sfx.last_id == "eat_3" and _count("+20") == pops + 1, "황금 벌레는 eat_3 소리와 +N")
+	var gold_pops: Array = _main.hud.get_children().filter(func(n: Node) -> bool: return n is Label and n.text == "+20")
+	assert(gold_pops[0].get_theme_color("font_color") == Skins.GOLD["color"], "황금 벌레 점수는 금색")
+	var found := _count("황금!")
+	g.gold_appeared.emit(cell)
+	assert(_main.sfx.last_id == "gold" and _count("황금!") == found + 1, "황금 벌레가 나타나면 소리와 황금! 글자")
+	_main.sfx.set_muted(true)
+	var plays: int = _main.sfx.plays
+	g.gold_appeared.emit(cell)
+	_main._on_ate(0, 1, cell)
+	assert(_main.sfx.plays == plays, "소리를 끈 동안에는 소리가 없다(글자만 뜬다)")
+	_main.sfx.set_muted(false)
+	g.state = Game.State.RUNNING
+	g.combo = 1
+	g.combo_left = Tuning.COMBO_WINDOW * 0.5
+	_main._process(0.0)
+	assert(_main.hud.combo_label.visible and _main.hud.combo_label.text == "×2", "달리는 중에는 다음 벌레의 배율: %s" % _main.hud.combo_label.text)
+	assert(is_equal_approx(_main.hud.combo_bar.size.x, Hud.COMBO_BAR_W * 0.5), "막대는 남은 시간 비율")
+	g.combo = Tuning.COMBO_MAX
+	_main._process(0.0)
+	assert(_main.hud.combo_label.text == "×%d" % Tuning.COMBO_MAX, "배율은 COMBO_MAX 를 넘지 않는다")
+	g.state = Game.State.CLEARED
+	_main._process(0.0)
+	assert(not _main.hud.combo_label.visible, "클리어하면 콤보 줄이 사라진다")
+	g.state = Game.State.DEAD
+	_main._process(0.0)
+	assert(not _main.hud.combo_label.visible, "죽으면 콤보 줄이 사라진다")
+
+# 타임어택: 황금 벌레를 쓰지 않고 콤보 줄도 없다(콤보는 소리 음높이에만 드러난다).
+func _test_time_attack_has_no_gold_or_combo_line() -> void:
+	_reset()
+	_main.start_mode(Title.Mode.TIME_ATTACK)
+	var g: Game = _main.game
+	assert(not g.golden, "타임어택 판은 황금 벌레를 쓰지 않는다")
+	g.state = Game.State.RUNNING
+	g.combo = 2
+	g.combo_left = Tuning.COMBO_WINDOW
+	_main._process(0.0)
+	assert(not _main.hud.combo_label.visible and not _main.hud.combo_bar.visible, "타임어택에는 콤보 줄이 없다")
 
 func _test_time_attack_setup_and_timer() -> void:
 	_reset()

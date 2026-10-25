@@ -84,8 +84,10 @@ func new_game() -> void:
 	else:
 		game = Game.new(randi(), perf_requested(), level)
 	game.score = base_score
+	game.golden = mode == Title.Mode.CLASSIC  # 황금 벌레는 기존 방식만
 	game.ate.connect(_on_ate)
 	game.cleared.connect(_on_cleared)
+	game.gold_appeared.connect(_on_gold_appeared)
 	rig.position = Vector3(Tuning.BOX * 0.5, game.height * 0.5, Tuning.BOX * 0.5)  # 시점은 그대로, 상자 중심을 본다
 	controller.vertical = game.height > 1
 	if mode == Title.Mode.CLASSIC:
@@ -127,6 +129,9 @@ func _process(delta: float) -> void:
 	if mode == Title.Mode.TIME_ATTACK:
 		hud.set_timer(game.elapsed)
 		hud.set_bugs_left(game.field.bugs.size())
+	else:  # 콤보 줄: 다음 벌레에 붙을 배율과 남은 시간. 달리는 동안만 보인다
+		var running := game.state == Game.State.RUNNING
+		hud.set_combo(mini(game.combo + 1, Tuning.COMBO_MAX), game.combo_left / Tuning.COMBO_WINDOW if running else 0.0)
 	floors.update_from(game)
 	picker.visible = game.state == Game.State.WAITING  # 시작 전에만 지렁이를 고른다
 	if game.state == Game.State.DEAD:
@@ -147,13 +152,22 @@ func _on_skin_changed(index: int) -> void:
 	worm_view.apply_skin(index)
 	SaveData.save_skin(Skins.WORMS[index]["id"])
 
-# 벌레를 먹으면 먹은 칸 위에 점수가 떠오른다. 색은 벌레 종류 색이다.
+# 벌레를 먹으면 먹은 칸 위에 점수가 떠오른다(연속 배율을 곱한 값). 색은 벌레 종류 색, 황금 벌레는 금색이다.
 func _on_ate(kind: int, points: int, cell: Vector3i) -> void:
 	sfx.play_eat(kind, game.combo)
-	var at := rig.camera.unproject_position(WormPath.center(cell)) - Vector2(0, 40)
-	hud.pop("+%d" % points, at, Skins.BUGS[kind]["color"])
+	var color: Color = Skins.GOLD["color"] if kind == Game.GOLD else Skins.BUGS[kind]["color"]
+	hud.pop("+%d" % points, _screen_above(cell), color)
 	if mode == Title.Mode.CLASSIC:
 		_update_best_score()
+
+# 황금 벌레가 나타났다: 소리와, 그 칸 위에 금색 "황금!".
+func _on_gold_appeared(cell: Vector3i) -> void:
+	sfx.play("gold")
+	hud.pop("황금!", _screen_above(cell), Skins.GOLD["color"])
+
+# 칸 위쪽의 화면 위치(뷰포트 좌표): 떠오르는 글자를 놓는 자리.
+func _screen_above(cell: Vector3i) -> Vector2:
+	return rig.camera.unproject_position(WormPath.center(cell)) - Vector2(0, 40)
 
 func _on_title_started() -> void:
 	sfx.start_music()  # 사용자의 첫 터치라서 웹에서도 소리가 풀린다
