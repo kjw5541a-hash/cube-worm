@@ -3,6 +3,7 @@ extends SceneTree
 func _initialize() -> void:
 	_test_worm_skins()
 	_test_bug_kinds()
+	_test_gold_bug()
 	_test_worm_index()
 	print("test_skins: OK")
 	quit()
@@ -24,6 +25,13 @@ func _test_bug_kinds() -> void:
 		assert(b["name"] != "" and ResourceLoader.exists(b["model"]), "벌레 이름과 에셋: %s" % b["id"])
 		colors[b["color"]] = true
 	assert(colors.size() == Skins.BUGS.size(), "종류마다 색이 달라야 구별된다")
+
+# 황금 벌레는 일반 종류 목록에 없고, 번호는 그다음(Game.GOLD)이며, 색이 일반 벌레 셋과 다르다.
+func _test_gold_bug() -> void:
+	assert(Game.GOLD == Skins.BUGS.size(), "황금 벌레 번호는 일반 종류 다음이다")
+	assert(Skins.GOLD["name"] != "" and ResourceLoader.exists(Skins.GOLD["model"]), "황금 벌레 이름과 에셋")
+	for b in Skins.BUGS:
+		assert(b["color"] != Skins.GOLD["color"], "황금 벌레 색이 일반 벌레와 겹친다: %s" % b["id"])
 
 func _test_worm_index() -> void:
 	for i in Skins.WORMS.size():

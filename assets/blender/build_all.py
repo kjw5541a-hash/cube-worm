@@ -1,4 +1,4 @@
-"""에셋 10개를 만들어 assets/models/*.glb 로 내보낸다. 스크립트가 원본이고 GLB 는 결과물이다.
+"""에셋 11개를 만들어 assets/models/*.glb 로 내보낸다. 스크립트가 원본이고 GLB 는 결과물이다.
 
 실행(저장소 루트에서):
   /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python-exit-code 1 --python assets/blender/build_all.py

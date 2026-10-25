@@ -1,13 +1,13 @@
 extends SceneTree
 
-# 에셋 10개의 계약: 삼각형 상한, 크기, 칸 중심 원점, 앞(-Z) 방향, 눈 돌출, 면 수, 색.
+# 에셋 11개의 계약: 삼각형 상한, 크기, 칸 중심 원점, 앞(-Z) 방향, 눈 돌출, 면 수, 색.
 # Blender 스크립트(assets/blender)가 만든 GLB 를 헤드리스 Godot 으로 읽어 확인한다.
 
 const DIR := "res://assets/models/"
 const EPS := 0.005
 # 스킨: [마디 색, 머리 색]
 const SKINS := {"jelly": ["#F4A7AE", "#EE8793"], "ringed": ["#F29A88", "#EE7A6B"], "block": ["#F8BBC8", "#F4A6BA"]}
-const GRUBS := ["cream", "antenna", "glow"]
+const GRUBS := ["cream", "antenna", "glow", "gold"]
 
 func _initialize() -> void:
 	for skin in SKINS:
@@ -75,6 +75,8 @@ func _check_grub(kind: String) -> void:
 	for k in 3:
 		assert(box.size[k] <= 0.9, "벌레는 칸 안에 들어간다: %s %s" % [kind, box.size])
 	assert((box.position + box.size * 0.5).length() < 0.02, "원점은 칸 중심: %s" % kind)
+	if kind == "gold":
+		assert(_has_color(m["colors"], "#FFC21A") and _has_color(m["colors"], "#FFE680"), "황금 벌레는 금색 몸·머리")
 
 func _check_rock() -> void:
 	var m := Models.load_model(DIR + "rock.glb")

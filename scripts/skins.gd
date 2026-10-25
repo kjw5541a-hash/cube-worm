@@ -19,6 +19,9 @@ const BUGS: Array[Dictionary] = [
 	{"id": "glow", "name": "반딧불", "model": DIR + "grub_glow.glb", "color": Color("#FF9B3D")},
 ]
 
+# 황금 벌레(콤보 보상으로 잠깐 나오는 큰 점수). 종류 번호는 Game.GOLD 다. color 는 고리·기둥·층 눈금 점·점수 글자의 색.
+const GOLD := {"id": "gold", "name": "황금", "model": DIR + "grub_gold.glb", "color": Color("#FFE14A")}
+
 # 저장된 id 에 해당하는 지렁이 스킨 번호. 없는 id 면 0(기본).
 static func worm_index(id: String) -> int:
 	for i in WORMS.size():
