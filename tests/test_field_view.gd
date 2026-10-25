@@ -9,6 +9,9 @@ func _initialize() -> void:
 	_test_rocks_use_the_model()
 	_test_rock_basis_is_axis_aligned_and_stable()
 	_test_ghost_is_pulled_into_the_head()
+	_test_gold_bug()
+	_test_gold_blink()
+	_test_gold_ghost()
 	print("test_field_view: OK")
 	quit()
 
@@ -94,6 +97,8 @@ func _test_markers_draw_behind_objects() -> void:
 	all.append_array(fv.stems)
 	all.append_array(fv.rock_rings)
 	all.append_array(fv.rock_stems)
+	all.append(fv.gold_ring)
+	all.append(fv.gold_stem)
 	for m in all:
 		var mat := m.material_override as BaseMaterial3D
 		assert(mat.depth_draw_mode == BaseMaterial3D.DEPTH_DRAW_DISABLED, "마커는 깊이를 쓰지 않는다")
@@ -148,4 +153,68 @@ func _test_ghost_is_pulled_into_the_head() -> void:
 	g.just_grew = false
 	fv._update()
 	assert(not fv.ghosts[1].visible, "자라는 걸음이 아니면 숨긴다")
+	fv.queue_free()
+
+# 황금 벌레: 있을 때만 보이고, 제 크기·고리·기둥을 갖고, 제자리에서 돈다.
+func _test_gold_bug() -> void:
+	var g := _game()
+	var fv := _view(g)
+	assert(not fv.gold.visible and not fv.gold_ring.visible and not fv.gold_stem.visible, "황금 벌레가 없으면 숨는다")
+	g.gold_cell = Vector3i(6, 1, 2)
+	g.gold_left = Tuning.GOLD_TIME
+	fv._update()
+	assert(fv.gold.visible and fv.gold_ring.visible and fv.gold_stem.visible, "있으면 벌레·고리가 보이고, 다른 층이라 기둥도 있다")
+	assert(fv.gold.scale.is_equal_approx(Vector3.ONE * Tuning.GOLD_SCALE), "일반 벌레보다 크다")
+	assert(fv.gold_ring.scale.is_equal_approx(Vector3.ONE * Tuning.GOLD_SCALE), "고리도 벌레만큼 커서, 같은 층에서 벌레에 가려지지 않는다")
+	assert(absf(fv.gold.position.x - 6.5) < 1e-4 and absf(fv.gold.position.z - 2.5) < 1e-4 and absf(fv.gold.position.y - 1.5) < 0.07, "자기 칸에 있다: %s" % fv.gold.position)
+	assert(fv.gold_ring.position.distance_to(Vector3(6.5, 4.5, 2.5)) < 1e-4, "고리는 머리 층 높이, 벌레와 같은 (x, z): %s" % fv.gold_ring.position)
+	var marker := fv.gold_ring.material_override as StandardMaterial3D
+	assert(marker.albedo_color == Skins.GOLD["color"] and fv.gold_stem.material_override == marker, "고리·기둥은 황금 색")
+	assert(fv.gold.mesh != fv.bugs[0].mesh, "황금 벌레 모양")
+	var turn := fv.gold.rotation.y
+	fv._process(0.1)
+	assert(not is_equal_approx(fv.gold.rotation.y, turn), "제자리에서 돈다")
+	g.gold_cell = Vector3i(6, 4, 2)
+	fv._update()
+	assert(fv.gold_ring.visible and not fv.gold_stem.visible, "머리와 같은 층이면 고리만")
+	g.gold_left = 0.0
+	fv._update()
+	assert(not fv.gold.visible and not fv.gold_ring.visible and not fv.gold_stem.visible, "사라지면 모두 숨는다")
+	fv.queue_free()
+
+# 사라지기 직전 GOLD_BLINK 초에는 0.1초마다 숨었다 보였다 한다. 그 전에는 늘 보인다.
+func _test_gold_blink() -> void:
+	assert(not FieldView.gold_shown(0.0), "시간이 다하면 안 보인다")
+	assert(FieldView.gold_shown(Tuning.GOLD_TIME) and FieldView.gold_shown(Tuning.GOLD_BLINK + 0.01), "깜빡이기 전에는 늘 보인다")
+	var seen := {}
+	for i in 15:
+		seen[FieldView.gold_shown(Tuning.GOLD_BLINK - 0.05 - 0.1 * i)] = true
+	assert(seen.size() == 2, "마지막 GOLD_BLINK 초에는 숨었다 보였다 한다")
+	var g := _game()
+	var fv := _view(g)
+	g.gold_cell = Vector3i(6, 1, 2)
+	for left in [Tuning.GOLD_BLINK - 0.05, Tuning.GOLD_BLINK - 0.15]:
+		g.gold_left = left
+		fv._update()
+		assert(fv.gold.visible == FieldView.gold_shown(left) and fv.gold_ring.visible == fv.gold.visible, "벌레와 고리가 같이 깜빡인다")
+	fv.queue_free()
+
+# 먹힌 황금 벌레도 머리로 빨려 들며 작아진다(황금 크기에서 시작).
+func _test_gold_ghost() -> void:
+	var g := _game()
+	g.state = Game.State.RUNNING
+	g.worm.head_exit = Vector3i(-1, 0, 0)
+	var fv := _view(g)
+	assert(fv.ghosts.size() == Tuning.BUG_COUNT + 1 and not fv.ghosts[Game.GOLD].visible, "먹히는 벌레 자리는 일반 종류마다 하나와 황금 하나")
+	g.just_grew = true
+	g.eaten_cell = Vector3i(4, 4, 4)
+	g.eaten_kind = Game.GOLD
+	g.alpha = 0.0
+	fv._update()
+	assert(fv.ghosts[Game.GOLD].visible and not fv.ghosts[0].visible, "황금 벌레만 보인다")
+	assert(is_equal_approx(fv.ghosts[Game.GOLD].scale.x, Tuning.GOLD_SCALE), "처음에는 황금 벌레 제 크기로")
+	g.alpha = Tuning.EAT_PULL * 0.5
+	fv._update()
+	var mid := fv.ghosts[Game.GOLD].scale.x
+	assert(mid > 0.0 and mid < Tuning.GOLD_SCALE, "빨려 들며 작아진다: %f" % mid)
 	fv.queue_free()

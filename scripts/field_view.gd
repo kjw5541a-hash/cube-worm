@@ -1,7 +1,7 @@
 class_name FieldView
 extends Node3D
 
-# 흙 상자, 바위, 벌레(종류 3가지), 머리 층의 아래·위 판, 벌레 고리·기둥, 머리로 빨려 드는 벌레.
+# 흙 상자, 바위, 벌레(종류 3가지)와 황금 벌레, 머리 층의 아래·위 판, 벌레 고리·기둥, 머리로 빨려 드는 벌레.
 
 const ROCK_MODEL := "res://assets/models/rock.glb"
 const BOX_PRIORITY := -20     # 흙 상자가 가장 먼저
@@ -20,7 +20,10 @@ var rings: Array[MeshInstance3D] = []
 var stems: Array[MeshInstance3D] = []
 var rock_rings: Array[MeshInstance3D] = []  # 바위 i 의 머리 층 고리·기둥(벌레와 같은 방식)
 var rock_stems: Array[MeshInstance3D] = []
-var ghosts: Array[MeshInstance3D] = []  # 먹히는 중인 벌레(종류마다 하나)
+var ghosts: Array[MeshInstance3D] = []  # 먹히는 중인 벌레(종류마다 하나, 번호 Game.GOLD 는 황금 벌레)
+var gold: MeshInstance3D                # 황금 벌레
+var gold_ring: MeshInstance3D
+var gold_stem: MeshInstance3D
 var focus_layer := 0  # 지금 머리가 있는 층(셰이더 전역 값과 같다)
 var _time := 0.0
 var _box_mesh: BoxMesh
@@ -88,6 +91,13 @@ func _init() -> void:
 			stems.append(_mesh(stem_mesh, marker))
 		ghosts.append(_bug_node(model, false))
 		ghosts[k].visible = false
+	var gold_model := Models.load_model(Skins.GOLD["model"])
+	gold = _bug_node(gold_model, true)
+	var gold_marker := _marker_material(Skins.GOLD["color"])
+	gold_ring = _mesh(ring_mesh, gold_marker)
+	gold_stem = _mesh(stem_mesh, gold_marker)
+	ghosts.append(_bug_node(gold_model, false))  # 번호가 Game.GOLD 다
+	ghosts[Game.GOLD].visible = false
 
 # 고리·기둥 재질. 깊이를 쓰지 않고 상자 다음, 물체보다 먼저 그려서 지렁이·바위·벌레는 늘 마커 위에 온다.
 # 마커는 머리 층 높이에 떠 있어 화면에서 지렁이 몸과 겹치는데, 그냥 두면 지렁이를 관통해 보인다.
@@ -165,13 +175,8 @@ func _update() -> void:
 			bugs[b].position = p + Vector3(0, 0.06 * sin(_time * 3.0 + c.x + c.z * 1.7), 0)
 			bugs[b].rotation.y = 0.35 * sin(_time * 2.2 + c.x * 1.3 + c.y)
 			_flicker(bugs[b], c)
-			rings[b].position = Vector3(p.x, head_y, p.z)
-			# 기둥은 꼼지락을 뺀 칸 중심으로 잰다. 같은 층에서 기둥이 깜빡이지 않게.
-			var gap := p.y - head_y
-			if absf(gap) > 0.05:
-				stems[b].visible = true
-				stems[b].position = Vector3(p.x, head_y + gap * 0.5, p.z)
-				stems[b].scale = Vector3(1, absf(gap), 1)
+			_place_marker(rings[b], stems[b], p, head_y)
+	_update_gold(head_y)
 	var rock_cells := game.field.rocks.keys()
 	for i in rock_rings.size():
 		var has := i < rock_cells.size()
@@ -179,18 +184,45 @@ func _update() -> void:
 		rock_stems[i].visible = false
 		if not has:
 			continue
-		var p := WormPath.center(rock_cells[i])
-		rock_rings[i].position = Vector3(p.x, head_y, p.z)
-		var gap := p.y - head_y
-		if absf(gap) > 0.05:
-			rock_stems[i].visible = true
-			rock_stems[i].position = Vector3(p.x, head_y + gap * 0.5, p.z)
-			rock_stems[i].scale = Vector3(1, absf(gap), 1)
+		_place_marker(rock_rings[i], rock_stems[i], WormPath.center(rock_cells[i]), head_y)
 	_update_ghost()
 
-# 벌레의 은은한 발광이 느리게 깜빡인다.
-func _flicker(bug: MeshInstance3D, c: Vector3i) -> void:
-	var e := 0.5 + 0.2 * sin(_time * 1.6 + c.x * 0.9 + c.z * 1.3)
+# 칸 중심 p 의 고리·기둥을 머리 층 높이 head_y 에 맞춘다. 높이 차가 있으면 기둥이 고리까지 이어진다.
+# 기둥은 꼼지락을 뺀 칸 중심으로 잰다. 같은 층에서 기둥이 깜빡이지 않게.
+func _place_marker(ring: MeshInstance3D, stem: MeshInstance3D, p: Vector3, head_y: float) -> void:
+	ring.position = Vector3(p.x, head_y, p.z)
+	var gap := p.y - head_y
+	stem.visible = absf(gap) > 0.05
+	if stem.visible:
+		stem.position = Vector3(p.x, head_y + gap * 0.5, p.z)
+		stem.scale = Vector3(1, absf(gap), 1)
+
+# 황금 벌레가 지금 보이는가: 남은 시간 left 가 있고, 사라지기 직전 GOLD_BLINK 초는 0.1초마다 숨었다 보였다 한다.
+static func gold_shown(left: float) -> bool:
+	if left <= 0.0:
+		return false
+	return left > Tuning.GOLD_BLINK or int(left * 10.0) % 2 == 0
+
+# 황금 벌레: 있으면 제자리에서 돌며 세게 빛난다. 고리·기둥도 같이 깜빡인다.
+func _update_gold(head_y: float) -> void:
+	var on := gold_shown(game.gold_left)
+	gold.visible = on
+	gold_ring.visible = on
+	gold_stem.visible = false
+	if not on:
+		return
+	var c := game.gold_cell
+	var p := WormPath.center(c)
+	gold.position = p + Vector3(0, 0.06 * sin(_time * 3.0 + c.x + c.z * 1.7), 0)
+	gold.rotation.y = _time * Tuning.GOLD_SPIN
+	gold.scale = Vector3.ONE * Tuning.GOLD_SCALE
+	_flicker(gold, c, 0.9, 0.4, 5.0)
+	_place_marker(gold_ring, gold_stem, p, head_y)
+	gold_ring.scale = Vector3.ONE * Tuning.GOLD_SCALE  # 고리도 벌레만큼 크게: 같은 층에서 벌레에 가려지지 않는다
+
+# 벌레의 은은한 발광이 느리게 깜빡인다. 황금 벌레는 더 세고 빠르게 넘긴다.
+func _flicker(bug: MeshInstance3D, c: Vector3i, base := 0.5, amp := 0.2, rate := 1.6) -> void:
+	var e := base + amp * sin(_time * rate + c.x * 0.9 + c.z * 1.3)
 	for i in bug.mesh.get_surface_count():
 		(bug.get_surface_override_material(i) as ShaderMaterial).set_shader_parameter("emission", e)
 
@@ -205,4 +237,4 @@ func _update_ghost() -> void:
 	var ghost := ghosts[game.eaten_kind]
 	ghost.visible = true
 	ghost.position = WormPath.center(game.eaten_cell).lerp(WormPath.segment(game.worm, 0, game.alpha).origin, e)
-	ghost.scale = Vector3.ONE * (1.0 - e)
+	ghost.scale = Vector3.ONE * (1.0 - e) * (Tuning.GOLD_SCALE if game.eaten_kind == Game.GOLD else 1.0)

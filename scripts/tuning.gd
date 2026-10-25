@@ -58,3 +58,6 @@ const DEATH_SQUASH_TIME := 0.14             # 찌그러지는 데 걸리는 시�
 const SHAKE_TIME := 0.24                    # 죽을 때 화면 흔들림 시간(초)
 const SHAKE_AMP := 0.18                     # 화면 흔들림 세기(월드 길이)
 const POP_TIME := 0.9                       # 점수 +N 이 떠올라 사라지는 시간(초)
+const GOLD_SCALE := 1.3                     # 황금 벌레의 크기 배율(일반 벌레보다 크게)
+const GOLD_SPIN := 3.0                      # 황금 벌레가 제자리에서 도는 속도(라디안/초)
+const GOLD_BLINK := 1.5                     # 황금 벌레가 사라지기 이 시간(초) 전부터 0.1초마다 깜빡인다
