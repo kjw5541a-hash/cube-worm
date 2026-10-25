@@ -17,6 +17,7 @@ func _initialize() -> void:
 	g.gold_left = Tuning.GOLD_TIME
 	var last: Dictionary = LayerBadges.entries(g).back()
 	assert(last["dy"] == 2 and last["color"] == Skins.GOLD["color"], "황금 벌레는 금색 배지")
+	assert(last["gold"] and not e[0]["gold"], "황금 배지만 반전 모양(진한 바탕에 금색)으로 그린다")
 	g.gold_cell.y = y
 	assert(LayerBadges.entries(g).size() == 2, "같은 층 황금 벌레는 배지가 없다")
 
