@@ -6,12 +6,13 @@ extends Control
 # 황금 벌레는 반대로 진한 바탕에 금색 테두리·화살표·숫자다(노란 더듬이 벌레 배지와 헷갈리지 않게).
 
 const INK := Color(0.11, 0.07, 0.05)  # 화살표·숫자·테두리(배경과 같은 진한 흙색)
-const FONT_SIZE := 26
+const FONT_SIZE := 18
 
 var items: Array[Dictionary] = []  # 배지마다 {cell, dy, color, gold, pos}
 
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	modulate.a = Tuning.BADGE_ALPHA
 
 # 머리와 다른 층에 있는 벌레(보이는 황금 벌레 포함)마다 {cell, dy(위로 +), color, gold}.
 static func entries(g: Game) -> Array[Dictionary]:
@@ -44,14 +45,14 @@ func _draw() -> void:
 		var box := StyleBoxFlat.new()
 		box.bg_color = INK if e["gold"] else e["color"]
 		box.border_color = ink
-		box.set_border_width_all(3)
+		box.set_border_width_all(2)
 		box.set_corner_radius_all(int(s.y * 0.5))
 		draw_style_box(box, r)
 		# 화살표: 배지 왼쪽, 위층이면 위로, 아래층이면 아래로.
-		var a := Vector2(r.position.x + s.y * 0.5 + 2.0, r.position.y + s.y * 0.5)
+		var a := Vector2(r.position.x + s.y * 0.5 + 1.0, r.position.y + s.y * 0.5)
 		var up := 1.0 if e["dy"] > 0 else -1.0
 		draw_colored_polygon(PackedVector2Array([
-			a + Vector2(0, -9) * up, a + Vector2(-9, 7) * up, a + Vector2(9, 7) * up]), ink)
+			a + Vector2(0, -6) * up, a + Vector2(-6, 5) * up, a + Vector2(6, 5) * up]), ink)
 		var t := str(absi(e["dy"]))
 		var base := r.position.y + (s.y + font.get_ascent(FONT_SIZE) - font.get_descent(FONT_SIZE)) * 0.5
-		draw_string(font, Vector2(a.x + 14.0, base), t, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, ink)
+		draw_string(font, Vector2(a.x + 9.0, base), t, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, ink)

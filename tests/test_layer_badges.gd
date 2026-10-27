@@ -32,6 +32,8 @@ func _initialize() -> void:
 	assert(badges.items[0]["pos"].is_equal_approx(Vector2(want.x * 100.0 + head_y, want.z * 100.0)), "고리 자리: %s" % badges.items[0]["pos"])
 	badges.update_from(Game.new(3, false, 1), func(p: Vector3) -> Vector2: return Vector2.ZERO)
 	assert(badges.items.is_empty(), "1층짜리 판에는 배지가 없다")
+	assert(Tuning.BADGE_SIZE.x <= 48.0 and Tuning.BADGE_SIZE.y <= 30.0, "배지는 작아서 아래 벌레·바위를 덜 가린다: %s" % Tuning.BADGE_SIZE)
+	assert(is_equal_approx(badges.modulate.a, Tuning.BADGE_ALPHA) and Tuning.BADGE_ALPHA < 0.7, "배지는 반투명이라 아래 물체가 비친다")
 	badges.queue_free()
 	print("test_layer_badges: OK")
 	quit()

@@ -60,5 +60,6 @@ const SHAKE_AMP := 0.18                     # 화면 흔들림 세기(월드 길
 const POP_TIME := 0.9                       # 점수 +N 이 떠올라 사라지는 시간(초)
 const GOLD_SCALE := 1.3                     # 황금 벌레의 크기 배율(일반 벌레보다 크게)
 const GOLD_SPIN := 3.0                      # 황금 벌레가 제자리에서 도는 속도(라디안/초)
-const BADGE_SIZE := Vector2(64, 40)         # 다른 층 벌레 배지(▲N·▼N)의 크기(화면 픽셀, 720×1280 기준)
+const BADGE_SIZE := Vector2(44, 28)         # 다른 층 벌레 배지(▲N·▼N)의 크기(화면 픽셀, 720×1280 기준). 작을수록 아래 벌레·바위를 덜 가린다
+const BADGE_ALPHA := 0.55                   # 배지 불투명도: 아래 물체가 비쳐 보이게 반투명
 const GOLD_BLINK := 1.5                     # 황금 벌레가 사라지기 이 시간(초) 전부터 0.1초마다 깜빡인다
